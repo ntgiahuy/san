@@ -593,12 +593,12 @@ export function SlabApp() {
         <div className="overflow-auto border-b border-zinc-800 bg-zinc-900 p-3">
           {tab === "plan" && (
             <div className="flex flex-wrap gap-3">
-              <Panel title="1. Thông tin sàn" className="min-w-[300px] flex-1">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Panel title="1. Thông tin sàn" className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   <Field label="Tên sàn">
                     <Input value={project.info.name} onChange={(e) => patchInfo({ name: e.target.value })} />
                   </Field>
-                  <Field label="Chiều dày sàn (mm)">
+                  <Field label="Chiều dày sàn" unit="mm">
                     <Input
                       type="number"
                       value={project.info.thickness}
@@ -612,28 +612,28 @@ export function SlabApp() {
                       onChange={(e) => patchInfo({ quantity: Number(e.target.value) || 1 })}
                     />
                   </Field>
-                  <Field label="Lớp bảo vệ thép (mm)">
+                  <Field label="Lớp bảo vệ thép" unit="mm">
                     <Input
                       type="number"
                       value={project.info.cover}
                       onChange={(e) => patchInfo({ cover: Number(e.target.value) || 0 })}
                     />
                   </Field>
-                  <Field label="Bề rộng sàn (mm)">
+                  <Field label="Bề rộng sàn" unit="mm">
                     <Input
                       type="number"
                       value={project.planWidth}
                       onChange={(e) => persist({ ...project, planWidth: Number(e.target.value) || 0 })}
                     />
                   </Field>
-                  <Field label="Chiều dài sàn (mm)">
+                  <Field label="Chiều dài sàn" unit="mm">
                     <Input
                       type="number"
                       value={project.planHeight}
                       onChange={(e) => persist({ ...project, planHeight: Number(e.target.value) || 0 })}
                     />
                   </Field>
-                  <Field label="Chênh cao độ sàn thấp (mm)">
+                  <Field label="Chênh cao độ sàn thấp" unit="mm">
                     <Input
                       type="number"
                       value={project.info.lowSlabDrop}
@@ -647,8 +647,8 @@ export function SlabApp() {
 
           {tab === "beams" && (
             <div className="flex flex-wrap gap-3">
-              <Panel title="2. Số liệu dầm" className="min-w-[300px] flex-1">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Panel title="2. Số liệu dầm" className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   <Field label="Tên dầm">
                     <Input
                       value={project.info.beamNamePrefix}
@@ -658,7 +658,7 @@ export function SlabApp() {
                 </div>
                 <div className="mt-3 rounded border border-zinc-700 bg-zinc-950/60 p-2">
                   <div className="mb-2 text-xs font-semibold text-sky-300">Số liệu dầm</div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <Field label="Số lượng dầm theo phương X">
                       <Input
                         type="number"
@@ -675,21 +675,21 @@ export function SlabApp() {
                         onChange={(e) => patchBeamCount("Y", Number(e.target.value))}
                       />
                     </Field>
-                    <Field label="Chiều cao dầm H (mm)">
+                    <Field label="Chiều cao dầm H" unit="mm">
                       <Input
                         type="number"
                         value={project.info.beamH ?? 500}
                         onChange={(e) => patchBeamDims({ beamH: Number(e.target.value) || 0 })}
                       />
                     </Field>
-                    <Field label="Chiều rộng dầm B (mm)">
+                    <Field label="Chiều rộng dầm B" unit="mm">
                       <Input
                         type="number"
                         value={project.info.beamB ?? 220}
                         onChange={(e) => patchBeamDims({ beamB: Number(e.target.value) || 0 })}
                       />
                     </Field>
-                    <Field label="Lệch trục B1 (mm)">
+                    <Field label="Lệch trục B1" unit="mm">
                       <Input
                         type="number"
                         value={project.info.beamB1 ?? 110}
@@ -707,8 +707,9 @@ export function SlabApp() {
                     <div className="mb-2 text-xs font-semibold text-sky-300">Trục phương X (1, 2, 3…)</div>
                     <div className="space-y-1.5">
                       {sortAxes(project.axesX ?? []).map((ax, i) => (
-                        <div key={ax.id} className="grid grid-cols-[52px_1fr_28px] items-center gap-1">
+                        <div key={ax.id} className="flex flex-wrap items-center gap-1.5">
                           <Input
+                            className="w-14"
                             value={ax.name}
                             onChange={(e) => updateAxesX(renameAxis(project.axesX, ax.id, e.target.value))}
                           />
@@ -747,8 +748,9 @@ export function SlabApp() {
                     <div className="mb-2 text-xs font-semibold text-sky-300">Trục phương Y (A, B, C…)</div>
                     <div className="space-y-1.5">
                       {sortAxes(project.axesY ?? []).map((ay, i) => (
-                        <div key={ay.id} className="grid grid-cols-[52px_1fr_28px] items-center gap-1">
+                        <div key={ay.id} className="flex flex-wrap items-center gap-1.5">
                           <Input
+                            className="w-14"
                             value={ay.name}
                             onChange={(e) => updateAxesY(renameAxis(project.axesY, ay.id, e.target.value))}
                           />
@@ -797,15 +799,15 @@ export function SlabApp() {
                     {planSelection.kind === "bay" && selectedBaySpans() && (
                       <>
                         <p className="mb-2 text-[11px] text-zinc-400">{selectedBaySpans()!.name}</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Field label="Khoảng cách Lx (mm)">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                          <Field label="Khoảng cách Lx" unit="mm">
                             <Input
                               type="number"
                               value={Math.round(selectedBaySpans()!.lx)}
                               onChange={(e) => patchSelectedBaySpan("lx", Number(e.target.value))}
                             />
                           </Field>
-                          <Field label="Khoảng cách Ly (mm)">
+                          <Field label="Khoảng cách Ly" unit="mm">
                             <Input
                               type="number"
                               value={Math.round(selectedBaySpans()!.ly)}
@@ -818,29 +820,29 @@ export function SlabApp() {
                     {planSelection.kind === "beamSeg" && selectedBeamSegInfo() && (
                       <>
                         <p className="mb-2 text-[11px] text-zinc-400">{selectedBeamSegInfo()!.name}</p>
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                          <Field label="Khoảng cách L (mm)">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                          <Field label="Khoảng cách L" unit="mm">
                             <Input
                               type="number"
                               value={Math.round(selectedBeamSegInfo()!.length)}
                               onChange={(e) => patchSelectedBeamLength(Number(e.target.value))}
                             />
                           </Field>
-                          <Field label="Chiều cao H (mm)">
+                          <Field label="Chiều cao H" unit="mm">
                             <Input
                               type="number"
                               value={selectedBeamSegInfo()!.H}
                               onChange={(e) => patchSelectedBeamDims({ beamH: Number(e.target.value) || 0 })}
                             />
                           </Field>
-                          <Field label="Chiều rộng B (mm)">
+                          <Field label="Chiều rộng B" unit="mm">
                             <Input
                               type="number"
                               value={selectedBeamSegInfo()!.B}
                               onChange={(e) => patchSelectedBeamDims({ beamB: Number(e.target.value) || 0 })}
                             />
                           </Field>
-                          <Field label="Lệch trục B1 (mm)">
+                          <Field label="Lệch trục B1" unit="mm">
                             <Input
                               type="number"
                               value={selectedBeamSegInfo()!.B1}
@@ -903,8 +905,8 @@ export function SlabApp() {
 
           {tab === "draw" && (
             <div className="flex flex-wrap gap-3">
-              <Panel title="3. Vẽ thép sàn" className="min-w-[320px] flex-1">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Panel title="3. Vẽ thép sàn" className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   <Field label="Số hiệu thép">
                     <Input value={zoneForm.mark} onChange={(e) => setZoneForm({ ...zoneForm, mark: e.target.value })} />
                   </Field>
@@ -917,7 +919,7 @@ export function SlabApp() {
                   </Field>
                   <Field label="Đường kính thép">
                     <select
-                      className="h-8 w-full rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
+                      className="h-7 w-auto min-w-[4.5rem] shrink-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
                       value={zoneForm.dia}
                       onChange={(e) => setZoneForm({ ...zoneForm, dia: Number(e.target.value) })}
                     >
@@ -928,7 +930,7 @@ export function SlabApp() {
                   </Field>
                   <Field label="Khoảng rải thép (a)">
                     <select
-                      className="h-8 w-full rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
+                      className="h-7 w-auto min-w-[4.5rem] shrink-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
                       value={zoneForm.spacing}
                       onChange={(e) => setZoneForm({ ...zoneForm, spacing: Number(e.target.value) })}
                     >
@@ -937,14 +939,14 @@ export function SlabApp() {
                       ))}
                     </select>
                   </Field>
-                  <Field label="Móc thép trái">
+                  <Field label="Móc thép trái" unit="mm">
                     <Input
                       type="number"
                       value={zoneForm.leftHook}
                       onChange={(e) => setZoneForm({ ...zoneForm, leftHook: Number(e.target.value) || 0 })}
                     />
                   </Field>
-                  <Field label="Móc thép phải">
+                  <Field label="Móc thép phải" unit="mm">
                     <Input
                       type="number"
                       value={zoneForm.rightHook}
@@ -953,11 +955,12 @@ export function SlabApp() {
                   </Field>
                   <Field label="Ký hiệu khoảng rải">
                     <Input
+                      className="w-20"
                       value={zoneForm.spacingSymbol}
                       onChange={(e) => setZoneForm({ ...zoneForm, spacingSymbol: e.target.value })}
                     />
                   </Field>
-                  <Field label="Dày lớp bảo vệ">
+                  <Field label="Dày lớp bảo vệ" unit="mm">
                     <Input
                       type="number"
                       value={zoneForm.cover}
@@ -966,7 +969,7 @@ export function SlabApp() {
                   </Field>
                   <Field label="Lớp thép">
                     <select
-                      className="h-8 w-full rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
+                      className="h-7 w-auto min-w-[4.5rem] shrink-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
                       value={zoneForm.layer}
                       onChange={(e) => setZoneForm({ ...zoneForm, layer: e.target.value as RebarLayer })}
                     >
@@ -977,7 +980,7 @@ export function SlabApp() {
                   </Field>
                   <Field label="Phương">
                     <select
-                      className="h-8 w-full rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
+                      className="h-7 w-auto min-w-[4.5rem] shrink-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
                       value={zoneForm.direction}
                       onChange={(e) => setZoneForm({ ...zoneForm, direction: e.target.value as RebarDir })}
                     >
@@ -1037,14 +1040,14 @@ export function SlabApp() {
 
           {tab === "economy2" && (
             <Panel title="4. Bố trí thép 2 lớp tiết kiệm" className="max-w-3xl">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <Field label="Thép lớp dưới">
                   <Input
                     value={project.economy2.bottomSpec}
                     onChange={(e) => persist({ ...project, economy2: { ...project.economy2, bottomSpec: e.target.value } })}
                   />
                 </Field>
-                <Field label="Móc thép dưới">
+                <Field label="Móc thép dưới" unit="mm">
                   <Input
                     type="number"
                     value={project.economy2.bottomHook}
@@ -1057,7 +1060,7 @@ export function SlabApp() {
                     onChange={(e) => persist({ ...project, economy2: { ...project.economy2, topSpec: e.target.value } })}
                   />
                 </Field>
-                <Field label="Móc thép trên">
+                <Field label="Móc thép trên" unit="mm">
                   <Input
                     type="number"
                     value={project.economy2.topHook}
@@ -1070,7 +1073,7 @@ export function SlabApp() {
                     onChange={(e) => persist({ ...project, economy2: { ...project.economy2, structuralSpec: e.target.value } })}
                   />
                 </Field>
-                <Field label="Móc thép cấu tạo">
+                <Field label="Móc thép cấu tạo" unit="mm">
                   <Input
                     type="number"
                     value={project.economy2.structuralHook}
@@ -1108,15 +1111,15 @@ export function SlabApp() {
 
           {tab === "simple2" && (
             <div className="flex flex-wrap gap-3">
-              <Panel title="5. Bố trí thép 2 lớp đơn giản" className="min-w-[300px] flex-1">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <Panel title="5. Bố trí thép 2 lớp đơn giản" className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   <Field label="Thép lớp dưới">
                     <Input
                       value={project.simple2.bottomSpec}
                       onChange={(e) => persist({ ...project, simple2: { ...project.simple2, bottomSpec: e.target.value } })}
                     />
                   </Field>
-                  <Field label="Móc thép dưới">
+                  <Field label="Móc thép dưới" unit="mm">
                     <Input
                       type="number"
                       value={project.simple2.bottomHook}
@@ -1129,7 +1132,7 @@ export function SlabApp() {
                       onChange={(e) => persist({ ...project, simple2: { ...project.simple2, topSpec: e.target.value } })}
                     />
                   </Field>
-                  <Field label="Móc thép trên">
+                  <Field label="Móc thép trên" unit="mm">
                     <Input
                       type="number"
                       value={project.simple2.topHook}
@@ -1181,7 +1184,7 @@ export function SlabApp() {
 
           {tab === "section" && (
             <Panel title="6. Mặt cắt sàn" className="max-w-xl">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <Field label="Tên mặt cắt">
                   <Input
                     value={project.sections[0]?.name ?? "1"}
@@ -1193,7 +1196,7 @@ export function SlabApp() {
                     }}
                   />
                 </Field>
-                <Field label="Vị trí cắt (mm)">
+                <Field label="Vị trí cắt" unit="mm">
                   <Input
                     type="number"
                     value={project.sections[0]?.at ?? 0}
@@ -1246,7 +1249,7 @@ export function SlabApp() {
 
           {tab === "info" && (
             <Panel title="Thông tin xuất PDF" className="max-w-xl">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <Field label="Cấp bê tông">
                   <Input value={project.info.concreteGrade} onChange={(e) => patchInfo({ concreteGrade: e.target.value })} />
                 </Field>
@@ -1285,18 +1288,18 @@ export function SlabApp() {
                 </div>
               )}
               {planSelection?.kind === "bay" && selectedBaySpans() && (
-                <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <div className="col-span-2 text-[11px] text-zinc-400 sm:col-span-4">
+                <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="basis-full text-[11px] text-zinc-400">
                     {selectedBaySpans()!.name}
                   </div>
-                  <Field label="Khoảng cách Lx (mm)">
+                  <Field label="Khoảng cách Lx" unit="mm">
                     <Input
                       type="number"
                       value={Math.round(selectedBaySpans()!.lx)}
                       onChange={(e) => patchSelectedBaySpan("lx", Number(e.target.value))}
                     />
                   </Field>
-                  <Field label="Khoảng cách Ly (mm)">
+                  <Field label="Khoảng cách Ly" unit="mm">
                     <Input
                       type="number"
                       value={Math.round(selectedBaySpans()!.ly)}
@@ -1306,32 +1309,32 @@ export function SlabApp() {
                 </div>
               )}
               {planSelection?.kind === "beamSeg" && selectedBeamSegInfo() && (
-                <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                  <div className="col-span-2 text-[11px] text-zinc-400 sm:col-span-5">
+                <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="basis-full text-[11px] text-zinc-400">
                     {selectedBeamSegInfo()!.name}
                   </div>
-                  <Field label="Khoảng cách L (mm)">
+                  <Field label="Khoảng cách L" unit="mm">
                     <Input
                       type="number"
                       value={Math.round(selectedBeamSegInfo()!.length)}
                       onChange={(e) => patchSelectedBeamLength(Number(e.target.value))}
                     />
                   </Field>
-                  <Field label="H (mm)">
+                  <Field label="H" unit="mm">
                     <Input
                       type="number"
                       value={selectedBeamSegInfo()!.H}
                       onChange={(e) => patchSelectedBeamDims({ beamH: Number(e.target.value) || 0 })}
                     />
                   </Field>
-                  <Field label="B (mm)">
+                  <Field label="B" unit="mm">
                     <Input
                       type="number"
                       value={selectedBeamSegInfo()!.B}
                       onChange={(e) => patchSelectedBeamDims({ beamB: Number(e.target.value) || 0 })}
                     />
                   </Field>
-                  <Field label="B1 (mm)">
+                  <Field label="B1" unit="mm">
                     <Input
                       type="number"
                       value={selectedBeamSegInfo()!.B1}
