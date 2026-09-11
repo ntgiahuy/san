@@ -23,9 +23,9 @@ export function SlabPreview({
   const axesX = useMemo(() => sortAxes(project.axesX ?? []), [project.axesX]);
   const axesY = useMemo(() => sortAxes(project.axesY ?? []), [project.axesY]);
 
-  const W = 640;
-  const H = 420;
-  const pad = 48;
+  const W = 960;
+  const H = 640;
+  const pad = 40;
   const sx = (W - pad * 2) / Math.max(project.planWidth, 1);
   const sy = (H - pad * 2) / Math.max(project.planHeight, 1);
   const s = Math.min(sx, sy);
@@ -36,8 +36,8 @@ export function SlabPreview({
 
   if (show3d) {
     return (
-      <div className="flex h-full min-h-[280px] items-center justify-center bg-zinc-950 p-4">
-        <svg viewBox="0 0 640 360" className="h-full w-full max-h-[340px]">
+      <div className="flex h-full min-h-0 items-center justify-center bg-zinc-950 p-4">
+        <svg viewBox="0 0 640 360" className="h-full w-full">
           <defs>
             <linearGradient id="slabFace" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#3f3f46" />
@@ -138,9 +138,9 @@ export function SlabPreview({
         <g key={`by-${axisIndex}-${segIndex}`}>
           {/* Vùng click rộng hơn bề rộng dầm để dễ chọn */}
           <rect
-            x={X(ax.pos) - Math.max(b1, bw / 2) * s - 6}
+            x={X(ax.pos) - Math.max(b1, bw / 2) * s - 10}
             y={Y(Math.max(y0, y1))}
-            width={Math.max(bw * s, 14) + 12}
+            width={Math.max(bw * s, 18) + 20}
             height={Math.abs(y1 - y0) * s}
             fill="transparent"
             className={interactive ? "cursor-pointer" : undefined}
@@ -196,9 +196,9 @@ export function SlabPreview({
         <g key={`bx-${axisIndex}-${segIndex}`}>
           <rect
             x={X(Math.min(x0, x1))}
-            y={Y(ay.pos) - Math.max(b1, bw / 2) * s - 6}
+            y={Y(ay.pos) - Math.max(b1, bw / 2) * s - 10}
             width={Math.abs(x1 - x0) * s}
-            height={Math.max(bw * s, 14) + 12}
+            height={Math.max(bw * s, 18) + 20}
             fill="transparent"
             className={interactive ? "cursor-pointer" : undefined}
             pointerEvents={interactive ? "all" : "none"}
@@ -237,11 +237,12 @@ export function SlabPreview({
   });
 
   return (
-    <div className="flex h-full min-h-[280px] flex-col bg-zinc-950">
-      <div className="flex min-h-0 flex-1 items-center justify-center p-2">
+    <div className="flex h-full min-h-0 flex-col bg-zinc-950">
+      <div className="flex min-h-0 flex-1 items-center justify-center p-1 sm:p-2">
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="h-full w-full max-h-[400px]"
+          className="h-full w-full"
+          preserveAspectRatio="xMidYMid meet"
           onClick={() => {
             if (interactive && onSelect) onSelect(null);
           }}

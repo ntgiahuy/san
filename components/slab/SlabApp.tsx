@@ -589,8 +589,8 @@ export function SlabApp() {
         ))}
       </nav>
 
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(220px,300px)_minmax(0,1fr)]">
-        <div className="overflow-auto border-b border-zinc-800 bg-zinc-900 p-3">
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(140px,32vh)_minmax(0,1fr)] lg:grid-rows-1 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
+        <div className="min-h-0 overflow-auto border-b border-zinc-800 bg-zinc-900 p-3 lg:border-b-0 lg:border-r">
           {tab === "plan" && (
             <div className="flex flex-wrap gap-3">
               <Panel title="1. Thông tin sàn" className="min-w-0 flex-1">
