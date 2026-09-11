@@ -152,6 +152,31 @@ function drawPlan(
   const toX = (mm: number) => x0 + mm * s;
   const toY = (mm: number) => y0 + (project.planHeight - mm) * s;
 
+  for (const ax of project.axesX ?? []) {
+    const x = toX(ax.pos);
+    line(ctx, x, y0, x, y0 + ph, 0.35);
+    ctx.page.drawCircle({
+      x,
+      y: ty(y0 + ph + 12),
+      size: 7,
+      borderColor: BLACK,
+      borderWidth: 0.8,
+    });
+    textSimple(ctx, ax.name, x, y0 + ph + 15, 7, true, "center");
+  }
+  for (const ay of project.axesY ?? []) {
+    const y = toY(ay.pos);
+    line(ctx, x0, y, x0 + pw, y, 0.35);
+    ctx.page.drawCircle({
+      x: x0 - 12,
+      y: ty(y),
+      size: 7,
+      borderColor: BLACK,
+      borderWidth: 0.8,
+    });
+    textSimple(ctx, ay.name, x0 - 12, y + 2.5, 7, true, "center");
+  }
+
   for (const b of project.beams) {
     drawBeam(ctx, b, toX, toY, s);
   }

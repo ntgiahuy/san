@@ -19,6 +19,16 @@ import {
   computeModel,
   effectiveZones,
 } from "@/lib/calc";
+import {
+  applyAxesToProject,
+  axisSpan,
+  insertSlabBayX,
+  insertSlabBayY,
+  removeAxis,
+  renameAxis,
+  setAxisSpan,
+  sortAxes,
+} from "@/lib/grid";
 import { withBasePath } from "@/lib/base-path";
 import { downloadPdf, generateSlabPdf } from "@/lib/pdf/generate";
 import {
@@ -220,18 +230,26 @@ export function SlabApp() {
   }
 
   function assignAllBeams() {
-    const W = project.planWidth;
-    const H = project.planHeight;
-    const prefix = project.info.beamNamePrefix || "D";
-    const beams = [
-      { id: uid("beam"), name: `${prefix}1`, size: project.info.beamSizeX, direction: "Y" as const, axis: 0, start: 0, end: H, offset: 110 },
-      { id: uid("beam"), name: `${prefix}2`, size: project.info.beamSizeX, direction: "Y" as const, axis: W / 2, start: 0, end: H, offset: 110 },
-      { id: uid("beam"), name: `${prefix}3`, size: project.info.beamSizeX, direction: "Y" as const, axis: W, start: 0, end: H, offset: 110 },
-      { id: uid("beam"), name: `${prefix}4`, size: project.info.beamSizeY, direction: "X" as const, axis: 0, start: 0, end: W, offset: 110 },
-      { id: uid("beam"), name: `${prefix}5`, size: project.info.beamSizeY, direction: "X" as const, axis: H, start: 0, end: W, offset: 110 },
-    ];
-    persist({ ...project, beams });
-    setStatus("Đã gán dầm vào mặt bằng.");
+    persist(applyAxesToProject(project));
+    setStatus("Đã gán dầm theo trục lưới.");
+  }
+
+  function updateAxesX(nextAxes: typeof project.axesX) {
+    persist(applyAxesToProject({ ...project, axesX: nextAxes }));
+  }
+
+  function updateAxesY(nextAxes: typeof project.axesY) {
+    persist(applyAxesToProject({ ...project, axesY: nextAxes }));
+  }
+
+  function addSlabBayX() {
+    persist(insertSlabBayX(project, 3000));
+    setStatus("Đã chèn thêm ô sàn theo phương X (trục mới).");
+  }
+
+  function addSlabBayY() {
+    persist(insertSlabBayY(project, 3000));
+    setStatus("Đã chèn thêm ô sàn theo phương Y (trục mới).");
   }
 
   function insertOpening() {
@@ -435,9 +453,91 @@ export function SlabApp() {
                     />
                   </Field>
                 </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">
+                    <div className="mb-2 text-xs font-semibold text-sky-300">Trục phương X (1, 2, 3…)</div>
+                    <div className="space-y-1.5">
+                      {sortAxes(project.axesX ?? []).map((ax, i) => (
+                        <div key={ax.id} className="grid grid-cols-[52px_1fr_28px] items-center gap-1">
+                          <Input
+                            value={ax.name}
+                            onChange={(e) => updateAxesX(renameAxis(project.axesX, ax.id, e.target.value))}
+                          />
+                          <Input
+                            type="number"
+                            title={i === 0 ? "Vị trí gốc (mm)" : "Khoảng cách từ trục trước (mm)"}
+                            value={axisSpan(project.axesX, i)}
+                            onChange={(e) => {
+                              const v = Number(e.target.value) || 0;
+                              if (i === 0) {
+                                const sorted = sortAxes(project.axesX);
+                                const delta = v - sorted[0].pos;
+                                updateAxesX(sorted.map((a) => ({ ...a, pos: a.pos + delta })));
+                              } else {
+                                updateAxesX(setAxisSpan(project.axesX, i, v));
+                              }
+                            }}
+                          />
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            className="px-1"
+                            disabled={(project.axesX?.length ?? 0) <= 2}
+                            onClick={() => updateAxesX(removeAxis(project.axesX, ax.id))}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <Button size="sm" variant="secondary" className="mt-2 w-full" onClick={addSlabBayX}>
+                      <Plus /> Chèn sàn / thêm trục X
+                    </Button>
+                  </div>
+                  <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">
+                    <div className="mb-2 text-xs font-semibold text-sky-300">Trục phương Y (A, B, C…)</div>
+                    <div className="space-y-1.5">
+                      {sortAxes(project.axesY ?? []).map((ay, i) => (
+                        <div key={ay.id} className="grid grid-cols-[52px_1fr_28px] items-center gap-1">
+                          <Input
+                            value={ay.name}
+                            onChange={(e) => updateAxesY(renameAxis(project.axesY, ay.id, e.target.value))}
+                          />
+                          <Input
+                            type="number"
+                            title={i === 0 ? "Vị trí gốc (mm)" : "Khoảng cách từ trục trước (mm)"}
+                            value={axisSpan(project.axesY, i)}
+                            onChange={(e) => {
+                              const v = Number(e.target.value) || 0;
+                              if (i === 0) {
+                                const sorted = sortAxes(project.axesY);
+                                const delta = v - sorted[0].pos;
+                                updateAxesY(sorted.map((a) => ({ ...a, pos: a.pos + delta })));
+                              } else {
+                                updateAxesY(setAxisSpan(project.axesY, i, v));
+                              }
+                            }}
+                          />
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            className="px-1"
+                            disabled={(project.axesY?.length ?? 0) <= 2}
+                            onClick={() => updateAxesY(removeAxis(project.axesY, ay.id))}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <Button size="sm" variant="secondary" className="mt-2 w-full" onClick={addSlabBayY}>
+                      <Plus /> Chèn sàn / thêm trục Y
+                    </Button>
+                  </div>
+                </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button variant="secondary" size="sm" className="text-amber-300" onClick={assignAllBeams}>
-                    Gán toàn bộ dầm vào mặt bằng…
+                    Gán toàn bộ dầm theo trục…
                   </Button>
                   <Button variant="secondary" size="sm" onClick={insertOpening}>
                     Chèn Ô thủng

@@ -7,6 +7,7 @@ import type {
   SlabInfo,
   SlabProject,
 } from "./types";
+import { defaultAxesX, defaultAxesY } from "./grid";
 import { uid } from "./utils";
 
 export function defaultInfo(): SlabInfo {
@@ -165,6 +166,8 @@ export function createSampleS1(): SlabProject {
     info: defaultInfo(),
     planWidth: 6000,
     planHeight: 4500,
+    axesX: defaultAxesX(6000),
+    axesY: defaultAxesY(4500),
     beams: sampleBeams(),
     openings: [],
     lowSlabs: [],

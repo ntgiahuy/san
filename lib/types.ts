@@ -23,6 +23,14 @@ export interface SlabInfo {
   drawingScale: number;
 }
 
+/** Trục lưới mặt bằng (mm). X: 1,2,3… — Y: A,B,C… */
+export interface GridAxis {
+  id: string;
+  name: string;
+  /** Vị trí tuyệt đối từ gốc (mm). */
+  pos: number;
+}
+
 /** Dầm trên mặt bằng (mm). */
 export interface PlanBeam {
   id: string;
@@ -110,9 +118,13 @@ export interface SectionCut {
 
 export interface SlabProject {
   info: SlabInfo;
-  /** Kích thước ô sàn mẫu (mm). */
+  /** Kích thước mặt bằng theo trục ngoài cùng (mm). */
   planWidth: number;
   planHeight: number;
+  /** Trục phương X (đứng) — tên 1, 2, 3… */
+  axesX: GridAxis[];
+  /** Trục phương Y (ngang) — tên A, B, C… */
+  axesY: GridAxis[];
   beams: PlanBeam[];
   openings: Opening[];
   lowSlabs: LowSlab[];

@@ -4,6 +4,7 @@ import type {
   RebarZone,
   SlabProject,
 } from "./types";
+import { ensureAxes } from "./grid";
 import { createSampleS1 } from "./sample";
 import { uid } from "./utils";
 
@@ -322,7 +323,7 @@ export function computeModel(project: SlabProject): ComputedSlabModel {
 
 export function normalizeProject(raw: SlabProject): SlabProject {
   const base = createSampleS1();
-  return {
+  const merged: SlabProject = {
     ...base,
     ...raw,
     info: { ...base.info, ...raw.info },
@@ -333,7 +334,10 @@ export function normalizeProject(raw: SlabProject): SlabProject {
     openings: raw.openings ?? [],
     lowSlabs: raw.lowSlabs ?? [],
     sections: raw.sections?.length ? raw.sections : base.sections,
+    axesX: raw.axesX?.length ? raw.axesX : base.axesX,
+    axesY: raw.axesY?.length ? raw.axesY : base.axesY,
   };
+  return ensureAxes(merged);
 }
 
 export { STOCK_M };

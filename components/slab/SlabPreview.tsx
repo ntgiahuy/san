@@ -14,7 +14,7 @@ export function SlabPreview({
   const zones = useMemo(() => effectiveZones(project), [project]);
   const W = 640;
   const H = 420;
-  const pad = 36;
+  const pad = 48;
   const sx = (W - pad * 2) / Math.max(project.planWidth, 1);
   const sy = (H - pad * 2) / Math.max(project.planHeight, 1);
   const s = Math.min(sx, sy);
@@ -85,6 +85,40 @@ export function SlabPreview({
           stroke="#79b8ff"
           strokeWidth="1.5"
         />
+        {(project.axesX ?? []).map((ax) => (
+          <g key={`ax-${ax.id}`}>
+            <line
+              x1={X(ax.pos)}
+              y1={Y(0)}
+              x2={X(ax.pos)}
+              y2={Y(project.planHeight)}
+              stroke="#52525b"
+              strokeWidth="0.6"
+              strokeDasharray="3 3"
+            />
+            <circle cx={X(ax.pos)} cy={Y(0) + 16} r="9" fill="#0d1117" stroke="#79b8ff" strokeWidth="1.2" />
+            <text x={X(ax.pos)} y={Y(0) + 20} textAnchor="middle" fill="#79b8ff" fontSize="11" fontWeight="700">
+              {ax.name}
+            </text>
+          </g>
+        ))}
+        {(project.axesY ?? []).map((ay) => (
+          <g key={`ay-${ay.id}`}>
+            <line
+              x1={X(0)}
+              y1={Y(ay.pos)}
+              x2={X(project.planWidth)}
+              y2={Y(ay.pos)}
+              stroke="#52525b"
+              strokeWidth="0.6"
+              strokeDasharray="3 3"
+            />
+            <circle cx={X(0) - 16} cy={Y(ay.pos)} r="9" fill="#0d1117" stroke="#fbbf24" strokeWidth="1.2" />
+            <text x={X(0) - 16} y={Y(ay.pos) + 4} textAnchor="middle" fill="#fbbf24" fontSize="11" fontWeight="700">
+              {ay.name}
+            </text>
+          </g>
+        ))}
         {project.beams.map((b) => {
           const { b: bw } = parseBeamSize(b.size);
           if (b.direction === "Y") {
