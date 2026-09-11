@@ -1140,14 +1140,80 @@ export function SlabApp() {
           )}
         </div>
 
-        <div className="min-h-0 overflow-hidden">
-          <SlabPreview
-            project={project}
-            show3d={project.show3d && tab === "model3d"}
-            interactive={tab === "plan" || tab === "draw"}
-            selection={planSelection}
-            onSelect={setPlanSelection}
-          />
+        <div className="flex min-h-0 flex-col overflow-hidden">
+          {(tab === "plan" || tab === "draw") && planSelection && (
+            <div className="shrink-0 border-b border-sky-800/60 bg-sky-950/40 px-3 py-2">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold text-sky-300">
+                  {planSelection.kind === "bay" ? "Ô sàn đang chọn trên bản vẽ" : "Đoạn dầm đang chọn trên bản vẽ"}
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => setPlanSelection(null)}>
+                  Bỏ chọn
+                </Button>
+              </div>
+              {planSelection.kind === "bay" && selectedBaySpans() && (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="col-span-2 text-[11px] text-zinc-400 sm:col-span-4">{selectedBaySpans()!.name}</div>
+                  <Field label="Khoảng cách Lx (mm)">
+                    <Input
+                      type="number"
+                      value={Math.round(selectedBaySpans()!.lx)}
+                      onChange={(e) => patchSelectedBaySpan("lx", Number(e.target.value))}
+                    />
+                  </Field>
+                  <Field label="Khoảng cách Ly (mm)">
+                    <Input
+                      type="number"
+                      value={Math.round(selectedBaySpans()!.ly)}
+                      onChange={(e) => patchSelectedBaySpan("ly", Number(e.target.value))}
+                    />
+                  </Field>
+                </div>
+              )}
+              {planSelection.kind === "beamSeg" && selectedBeamSegInfo() && (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  <div className="col-span-2 text-[11px] text-zinc-400 sm:col-span-5">{selectedBeamSegInfo()!.name}</div>
+                  <Field label="Khoảng cách L (mm)">
+                    <Input
+                      type="number"
+                      value={Math.round(selectedBeamSegInfo()!.length)}
+                      onChange={(e) => patchSelectedBeamLength(Number(e.target.value))}
+                    />
+                  </Field>
+                  <Field label="H (mm)">
+                    <Input
+                      type="number"
+                      value={selectedBeamSegInfo()!.H}
+                      onChange={(e) => patchSelectedBeamDims({ beamH: Number(e.target.value) || 0 })}
+                    />
+                  </Field>
+                  <Field label="B (mm)">
+                    <Input
+                      type="number"
+                      value={selectedBeamSegInfo()!.B}
+                      onChange={(e) => patchSelectedBeamDims({ beamB: Number(e.target.value) || 0 })}
+                    />
+                  </Field>
+                  <Field label="B1 (mm)">
+                    <Input
+                      type="number"
+                      value={selectedBeamSegInfo()!.B1}
+                      onChange={(e) => patchSelectedBeamDims({ beamB1: Number(e.target.value) || 0 })}
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <SlabPreview
+              project={project}
+              show3d={project.show3d && tab === "model3d"}
+              interactive={tab === "plan" || tab === "draw"}
+              selection={planSelection}
+              onSelect={setPlanSelection}
+            />
+          </div>
         </div>
       </div>
     </div>

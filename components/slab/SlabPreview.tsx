@@ -136,6 +136,21 @@ export function SlabPreview({
         selection.segIndex === segIndex;
       beamSegNodes.push(
         <g key={`by-${axisIndex}-${segIndex}`}>
+          {/* Vùng click rộng hơn bề rộng dầm để dễ chọn */}
+          <rect
+            x={X(ax.pos) - Math.max(b1, bw / 2) * s - 6}
+            y={Y(Math.max(y0, y1))}
+            width={Math.max(bw * s, 14) + 12}
+            height={Math.abs(y1 - y0) * s}
+            fill="transparent"
+            className={interactive ? "cursor-pointer" : undefined}
+            pointerEvents={interactive ? "all" : "none"}
+            onClick={(e) => {
+              if (!interactive || !onSelect) return;
+              e.stopPropagation();
+              onSelect({ kind: "beamSeg", dir: "Y", axisIndex, segIndex });
+            }}
+          />
           <rect
             x={X(ax.pos) - b1 * s}
             y={Y(Math.max(y0, y1))}
@@ -144,13 +159,7 @@ export function SlabPreview({
             fill={active ? "rgba(52,211,153,0.45)" : "#27272a"}
             stroke={active ? "#34d399" : "#a1a1aa"}
             strokeWidth={active ? 2 : 1}
-            className={interactive ? "cursor-pointer" : undefined}
-            pointerEvents={interactive ? "all" : "none"}
-            onClick={(e) => {
-              if (!interactive || !onSelect) return;
-              e.stopPropagation();
-              onSelect({ kind: "beamSeg", dir: "Y", axisIndex, segIndex });
-            }}
+            pointerEvents="none"
           />
           {active && (
             <text
@@ -187,12 +196,10 @@ export function SlabPreview({
         <g key={`bx-${axisIndex}-${segIndex}`}>
           <rect
             x={X(Math.min(x0, x1))}
-            y={Y(ay.pos) - b1 * s}
+            y={Y(ay.pos) - Math.max(b1, bw / 2) * s - 6}
             width={Math.abs(x1 - x0) * s}
-            height={bw * s}
-            fill={active ? "rgba(52,211,153,0.45)" : "#27272a"}
-            stroke={active ? "#34d399" : "#a1a1aa"}
-            strokeWidth={active ? 2 : 1}
+            height={Math.max(bw * s, 14) + 12}
+            fill="transparent"
             className={interactive ? "cursor-pointer" : undefined}
             pointerEvents={interactive ? "all" : "none"}
             onClick={(e) => {
@@ -200,6 +207,16 @@ export function SlabPreview({
               e.stopPropagation();
               onSelect({ kind: "beamSeg", dir: "X", axisIndex, segIndex });
             }}
+          />
+          <rect
+            x={X(Math.min(x0, x1))}
+            y={Y(ay.pos) - b1 * s}
+            width={Math.abs(x1 - x0) * s}
+            height={bw * s}
+            fill={active ? "rgba(52,211,153,0.45)" : "#27272a"}
+            stroke={active ? "#34d399" : "#a1a1aa"}
+            strokeWidth={active ? 2 : 1}
+            pointerEvents="none"
           />
           {active && (
             <text
