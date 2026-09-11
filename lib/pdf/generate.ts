@@ -238,19 +238,19 @@ function drawBeam(
   s: number,
 ) {
   const { b: bw } = parseBeamSize(b.size);
-  const half = (bw * s) / 2;
+  const b1 = (Number.isFinite(b.offset) ? b.offset : bw / 2) * s;
   if (b.direction === "Y") {
-    const x = toX(b.axis);
+    const xAxis = toX(b.axis);
     const y1 = toY(Math.max(b.start, b.end));
     const y2 = toY(Math.min(b.start, b.end));
-    rect(ctx, x - half, y1, bw * s, y2 - y1, 0.85);
-    textSimple(ctx, `${b.name}(${b.size})`, x + half + 3, (y1 + y2) / 2, 5.5);
+    rect(ctx, xAxis - b1, y1, bw * s, y2 - y1, 0.85);
+    textSimple(ctx, `${b.name}(${b.size})`, xAxis - b1 + bw * s + 3, (y1 + y2) / 2, 5.5);
   } else {
-    const y = toY(b.axis);
+    const yAxis = toY(b.axis);
     const x1 = toX(Math.min(b.start, b.end));
     const x2 = toX(Math.max(b.start, b.end));
-    rect(ctx, x1, y - half, x2 - x1, bw * s, 0.85);
-    textSimple(ctx, `${b.name}(${b.size})`, (x1 + x2) / 2, y - half - 8, 5.5, false, "center");
+    rect(ctx, x1, yAxis - b1, x2 - x1, bw * s, 0.85);
+    textSimple(ctx, `${b.name}(${b.size})`, (x1 + x2) / 2, yAxis - b1 - 8, 5.5, false, "center");
   }
 }
 

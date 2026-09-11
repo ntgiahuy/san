@@ -18,8 +18,13 @@ export function defaultInfo(): SlabInfo {
     cover: 25,
     beamNamePrefix: "D",
     textHeight: 250,
+    beamCountX: 3,
+    beamCountY: 2,
+    beamH: 500,
+    beamB: 220,
+    beamB1: 110,
     beamSizeX: "220x500",
-    beamSizeY: "220x400",
+    beamSizeY: "220x500",
     lowSlabDrop: 200,
     concreteGrade: "B25",
     steelGrade: "CB400-V",
@@ -55,31 +60,33 @@ function sampleBeams(): PlanBeam[] {
   const W = 6000;
   const H = 4500;
   const prefix = "D";
+  const size = "220x500";
+  const B1 = 110;
   const beams: PlanBeam[] = [];
-  // Dầm Y (song song trục Y) — kích thước X
+  // Dầm trên trục X (chạy theo phương Y)
   [0, W / 2, W].forEach((axis, i) => {
     beams.push({
       id: uid("beam"),
       name: `${prefix}${i + 1}`,
-      size: "220x500",
+      size,
       direction: "Y",
       axis,
       start: 0,
       end: H,
-      offset: 110,
+      offset: B1,
     });
   });
-  // Dầm X (song song trục X) — kích thước Y
+  // Dầm trên trục Y (chạy theo phương X)
   [0, H].forEach((axis, i) => {
     beams.push({
       id: uid("beam"),
       name: `${prefix}${i + 4}`,
-      size: "220x400",
+      size,
       direction: "X",
       axis,
       start: 0,
       end: W,
-      offset: 110,
+      offset: B1,
     });
   });
   return beams;

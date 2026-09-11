@@ -323,10 +323,55 @@ export function computeModel(project: SlabProject): ComputedSlabModel {
 
 export function normalizeProject(raw: SlabProject): SlabProject {
   const base = createSampleS1();
+  const rawInfo = raw.info ?? {};
+  const parsed = parseBeamSize(
+    (rawInfo as SlabProject["info"]).beamSizeX ||
+      (rawInfo as SlabProject["info"]).beamSizeY ||
+      base.info.beamSizeX,
+  );
+  const beamB =
+    Number.isFinite((rawInfo as SlabProject["info"]).beamB) &&
+    (rawInfo as SlabProject["info"]).beamB! > 0
+      ? (rawInfo as SlabProject["info"]).beamB!
+      : parsed.b;
+  const beamH =
+    Number.isFinite((rawInfo as SlabProject["info"]).beamH) &&
+    (rawInfo as SlabProject["info"]).beamH! > 0
+      ? (rawInfo as SlabProject["info"]).beamH!
+      : parsed.h;
+  const beamB1 =
+    Number.isFinite((rawInfo as SlabProject["info"]).beamB1) &&
+    (rawInfo as SlabProject["info"]).beamB1! >= 0
+      ? (rawInfo as SlabProject["info"]).beamB1!
+      : Math.round(beamB / 2);
+  const sizeStr = `${beamB}x${beamH}`;
+  const axesX = raw.axesX?.length ? raw.axesX : base.axesX;
+  const axesY = raw.axesY?.length ? raw.axesY : base.axesY;
+  const beamCountX =
+    Number.isFinite((rawInfo as SlabProject["info"]).beamCountX) &&
+    (rawInfo as SlabProject["info"]).beamCountX! >= 2
+      ? Math.round((rawInfo as SlabProject["info"]).beamCountX!)
+      : axesX.length;
+  const beamCountY =
+    Number.isFinite((rawInfo as SlabProject["info"]).beamCountY) &&
+    (rawInfo as SlabProject["info"]).beamCountY! >= 2
+      ? Math.round((rawInfo as SlabProject["info"]).beamCountY!)
+      : axesY.length;
+
   const merged: SlabProject = {
     ...base,
     ...raw,
-    info: { ...base.info, ...raw.info },
+    info: {
+      ...base.info,
+      ...rawInfo,
+      beamB,
+      beamH,
+      beamB1,
+      beamCountX,
+      beamCountY,
+      beamSizeX: sizeStr,
+      beamSizeY: sizeStr,
+    },
     simple2: { ...base.simple2, ...raw.simple2 },
     economy2: { ...base.economy2, ...raw.economy2 },
     beams: raw.beams?.length ? raw.beams : base.beams,
@@ -334,8 +379,8 @@ export function normalizeProject(raw: SlabProject): SlabProject {
     openings: raw.openings ?? [],
     lowSlabs: raw.lowSlabs ?? [],
     sections: raw.sections?.length ? raw.sections : base.sections,
-    axesX: raw.axesX?.length ? raw.axesX : base.axesX,
-    axesY: raw.axesY?.length ? raw.axesY : base.axesY,
+    axesX,
+    axesY,
   };
   return ensureAxes(merged);
 }

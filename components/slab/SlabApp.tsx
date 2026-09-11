@@ -21,6 +21,7 @@ import {
 } from "@/lib/calc";
 import {
   applyAxesToProject,
+  applyBeamCounts,
   axisSpan,
   insertSlabBayX,
   insertSlabBayY,
@@ -28,6 +29,7 @@ import {
   renameAxis,
   setAxisSpan,
   sortAxes,
+  syncBeamInfo,
 } from "@/lib/grid";
 import { withBasePath } from "@/lib/base-path";
 import { downloadPdf, generateSlabPdf } from "@/lib/pdf/generate";
@@ -109,6 +111,21 @@ export function SlabApp() {
 
   function patchInfo(partial: Partial<SlabProject["info"]>) {
     persist({ ...project, info: { ...project.info, ...partial } });
+  }
+
+  /** Cập nhật số liệu dầm (H/B/B1) và dựng lại dầm trên lưới. */
+  function patchBeamDims(partial: Partial<Pick<SlabProject["info"], "beamH" | "beamB" | "beamB1">>) {
+    const info = syncBeamInfo({ ...project.info, ...partial });
+    persist(applyAxesToProject({ ...project, info }));
+  }
+
+  function patchBeamCount(dir: "X" | "Y", value: number) {
+    const n = Math.max(2, Math.floor(value) || 2);
+    persist(
+      dir === "X"
+        ? applyBeamCounts(project, n, project.info.beamCountY)
+        : applyBeamCounts(project, project.info.beamCountX, n),
+    );
   }
 
   function setPreset(layoutPreset: LayoutPreset) {
@@ -419,18 +436,6 @@ export function SlabApp() {
                       onChange={(e) => patchInfo({ textHeight: Number(e.target.value) || 0 })}
                     />
                   </Field>
-                  <Field label="Kích thước Dầm X">
-                    <Input
-                      value={project.info.beamSizeX}
-                      onChange={(e) => patchInfo({ beamSizeX: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Kích thước Dầm Y">
-                    <Input
-                      value={project.info.beamSizeY}
-                      onChange={(e) => patchInfo({ beamSizeY: e.target.value })}
-                    />
-                  </Field>
                   <Field label="Bề rộng sàn (mm)">
                     <Input
                       type="number"
@@ -452,6 +457,52 @@ export function SlabApp() {
                       onChange={(e) => patchInfo({ lowSlabDrop: Number(e.target.value) || 0 })}
                     />
                   </Field>
+                </div>
+                <div className="mt-3 rounded border border-zinc-700 bg-zinc-950/60 p-2">
+                  <div className="mb-2 text-xs font-semibold text-sky-300">Số liệu dầm</div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    <Field label="Số lượng dầm theo phương X">
+                      <Input
+                        type="number"
+                        min={2}
+                        value={project.info.beamCountX ?? project.axesX?.length ?? 2}
+                        onChange={(e) => patchBeamCount("X", Number(e.target.value))}
+                      />
+                    </Field>
+                    <Field label="Số lượng dầm theo phương Y">
+                      <Input
+                        type="number"
+                        min={2}
+                        value={project.info.beamCountY ?? project.axesY?.length ?? 2}
+                        onChange={(e) => patchBeamCount("Y", Number(e.target.value))}
+                      />
+                    </Field>
+                    <Field label="Chiều cao dầm H (mm)">
+                      <Input
+                        type="number"
+                        value={project.info.beamH ?? 500}
+                        onChange={(e) => patchBeamDims({ beamH: Number(e.target.value) || 0 })}
+                      />
+                    </Field>
+                    <Field label="Chiều rộng dầm B (mm)">
+                      <Input
+                        type="number"
+                        value={project.info.beamB ?? 220}
+                        onChange={(e) => patchBeamDims({ beamB: Number(e.target.value) || 0 })}
+                      />
+                    </Field>
+                    <Field label="Lệch trục B1 (mm)">
+                      <Input
+                        type="number"
+                        value={project.info.beamB1 ?? 110}
+                        onChange={(e) => patchBeamDims({ beamB1: Number(e.target.value) || 0 })}
+                      />
+                    </Field>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-zinc-500">
+                    B1: từ mép trái dầm đến tim trục. 0 = tim trùng mép trái, B/2 = cân giữa. Kích thước
+                    dầm: {project.info.beamSizeX || `${project.info.beamB}x${project.info.beamH}`}.
+                  </p>
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">

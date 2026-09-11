@@ -121,11 +121,12 @@ export function SlabPreview({
         ))}
         {project.beams.map((b) => {
           const { b: bw } = parseBeamSize(b.size);
+          const b1 = Number.isFinite(b.offset) ? b.offset : bw / 2;
           if (b.direction === "Y") {
             return (
               <rect
                 key={b.id}
-                x={X(b.axis) - (bw * s) / 2}
+                x={X(b.axis) - b1 * s}
                 y={Y(Math.max(b.start, b.end))}
                 width={bw * s}
                 height={Math.abs(b.end - b.start) * s}
@@ -139,7 +140,7 @@ export function SlabPreview({
             <rect
               key={b.id}
               x={X(Math.min(b.start, b.end))}
-              y={Y(b.axis) - (bw * s) / 2}
+              y={Y(b.axis) - b1 * s}
               width={Math.abs(b.end - b.start) * s}
               height={bw * s}
               fill="#27272a"

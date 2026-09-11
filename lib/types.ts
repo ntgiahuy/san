@@ -15,6 +15,20 @@ export interface SlabInfo {
   cover: number;
   beamNamePrefix: string;
   textHeight: number;
+  /** Số dầm / trục theo phương X (1, 2, 3…). */
+  beamCountX: number;
+  /** Số dầm / trục theo phương Y (A, B, C…). */
+  beamCountY: number;
+  /** Chiều cao dầm H (mm). */
+  beamH: number;
+  /** Chiều rộng dầm B (mm). */
+  beamB: number;
+  /**
+   * Lệch trục B1 (mm): từ mép trái dầm đến tim trục.
+   * 0 = tim trùng mép trái, B/2 = cân giữa.
+   */
+  beamB1: number;
+  /** Chuỗi tương thích cũ "BxH" — đồng bộ từ beamB × beamH. */
   beamSizeX: string;
   beamSizeY: string;
   lowSlabDrop: number;
@@ -37,11 +51,15 @@ export interface PlanBeam {
   name: string;
   size: string;
   direction: RebarDir;
-  /** Tâm dầm theo phương vuông góc với hướng dầm. */
+  /** Tim trục theo phương vuông góc với hướng dầm. */
   axis: number;
   /** Đầu / cuối theo hướng dầm. */
   start: number;
   end: number;
+  /**
+   * Lệch trục B1 (mm): khoảng từ mép trái dầm đến tim trục.
+   * Vẽ: mép trái = axis − B1, mép phải = axis + (B − B1).
+   */
   offset: number;
 }
 

@@ -1,9 +1,38 @@
-import type { GridAxis, PlanBeam, SlabProject } from "./types";
+import type { GridAxis, PlanBeam, SlabInfo, SlabProject } from "./types";
 import { uid } from "./utils";
 
-function halfB(size: string): number {
-  const m = size.trim().toLowerCase().match(/^(\d+)\s*[x×]/);
-  return m ? Math.round(Number(m[1]) / 2) : 110;
+export function formatBeamSize(b: number, h: number): string {
+  return `${Math.max(1, Math.round(b))}x${Math.max(1, Math.round(h))}`;
+}
+
+/** Đọc B / H / B1 từ info (kèm fallback chuỗi beamSize cũ). */
+export function beamDims(info: SlabInfo): { B: number; H: number; B1: number } {
+  const fromStr = (size?: string) => {
+    const m = (size ?? "").trim().toLowerCase().match(/^(\d+)\s*[x×]\s*(\d+)/);
+    return m ? { b: Number(m[1]), h: Number(m[2]) } : { b: 220, h: 500 };
+  };
+  const parsed = fromStr(info.beamSizeX || info.beamSizeY);
+  const B = Number.isFinite(info.beamB) && info.beamB > 0 ? info.beamB : parsed.b;
+  const H = Number.isFinite(info.beamH) && info.beamH > 0 ? info.beamH : parsed.h;
+  const B1 =
+    Number.isFinite(info.beamB1) && info.beamB1 >= 0 ? info.beamB1 : Math.round(B / 2);
+  return { B, H, B1 };
+}
+
+/** Đồng bộ beamSizeX/Y + counts từ trục / kích thước số. */
+export function syncBeamInfo(info: SlabInfo, axesXLen?: number, axesYLen?: number): SlabInfo {
+  const { B, H, B1 } = beamDims(info);
+  const size = formatBeamSize(B, H);
+  return {
+    ...info,
+    beamB: B,
+    beamH: H,
+    beamB1: B1,
+    beamSizeX: size,
+    beamSizeY: size,
+    beamCountX: Math.max(2, Math.round(axesXLen ?? info.beamCountX ?? 2)),
+    beamCountY: Math.max(2, Math.round(axesYLen ?? info.beamCountY ?? 2)),
+  };
 }
 
 /** Tên trục X tiếp theo: 1,2,3… */
@@ -90,37 +119,67 @@ export function setAxisSpan(axes: GridAxis[], index: number, spanMm: number): Gr
   return sorted.map((a, i) => (i >= index ? { ...a, pos: a.pos + delta } : a));
 }
 
+/**
+ * Đặt số lượng trục / dầm: giữ kích thước tổng, chia đều nhịp.
+ * Tái dùng id/tên trục cũ khi còn.
+ */
+export function setAxisCount(
+  axes: GridAxis[],
+  count: number,
+  totalMm: number,
+  dir: "X" | "Y",
+): GridAxis[] {
+  const n = Math.max(2, Math.floor(count) || 2);
+  const sorted = sortAxes(axes);
+  const total = Math.max(500, totalMm || sorted[sorted.length - 1]?.pos || 6000);
+  const span = Math.round(total / (n - 1));
+  const out: GridAxis[] = [];
+  for (let i = 0; i < n; i++) {
+    const prev = sorted[i];
+    let name = prev?.name;
+    if (!name) {
+      name = dir === "X" ? nextAxisNameX(out) : nextAxisNameY(out);
+    }
+    out.push({
+      id: prev?.id ?? uid(dir === "X" ? "ax" : "ay"),
+      name,
+      pos: i === n - 1 ? total : i * span,
+    });
+  }
+  return out;
+}
+
 export function beamsFromAxes(project: SlabProject): PlanBeam[] {
   const axesX = sortAxes(project.axesX ?? []);
   const axesY = sortAxes(project.axesY ?? []);
-  const { planWidth: W, planHeight: H } = planSizeFromAxes(axesX, axesY);
+  const { planWidth: W, planHeight: Hplan } = planSizeFromAxes(axesX, axesY);
   const prefix = project.info.beamNamePrefix || "D";
-  const sizeX = project.info.beamSizeX;
-  const sizeY = project.info.beamSizeY;
+  const { B, H, B1 } = beamDims(project.info);
+  const size = formatBeamSize(B, H);
   const beams: PlanBeam[] = [];
   let n = 1;
   for (const ax of axesX) {
     beams.push({
       id: uid("beam"),
       name: `${prefix}${n++}`,
-      size: sizeX,
+      size,
       direction: "Y",
       axis: ax.pos,
       start: 0,
-      end: H,
-      offset: halfB(sizeX),
+      end: Hplan,
+      offset: B1,
     });
   }
   for (const ay of axesY) {
     beams.push({
       id: uid("beam"),
       name: `${prefix}${n++}`,
-      size: sizeY,
+      size,
       direction: "X",
       axis: ay.pos,
       start: 0,
       end: W,
-      offset: halfB(sizeY),
+      offset: B1,
     });
   }
   return beams;
@@ -136,14 +195,41 @@ export function ensureAxes(project: SlabProject): SlabProject {
       ? sortAxes(project.axesY)
       : defaultAxesY(project.planHeight || 4500);
   const size = planSizeFromAxes(axesX, axesY);
-  return { ...project, axesX, axesY, ...size };
+  const info = syncBeamInfo(project.info, axesX.length, axesY.length);
+  return { ...project, info, axesX, axesY, ...size };
 }
 
 export function applyAxesToProject(project: SlabProject): SlabProject {
   const withAxes = ensureAxes(project);
   const size = planSizeFromAxes(withAxes.axesX, withAxes.axesY);
-  const next = { ...withAxes, ...size };
+  const info = syncBeamInfo(withAxes.info, withAxes.axesX.length, withAxes.axesY.length);
+  const next = { ...withAxes, info, ...size };
   return { ...next, beams: beamsFromAxes(next) };
+}
+
+/** Đổi số lượng dầm theo X / Y rồi dựng lại trục + dầm. */
+export function applyBeamCounts(
+  project: SlabProject,
+  countX?: number,
+  countY?: number,
+): SlabProject {
+  const base = ensureAxes(project);
+  const cx = Math.max(2, Math.round(countX ?? base.info.beamCountX ?? base.axesX.length));
+  const cy = Math.max(2, Math.round(countY ?? base.info.beamCountY ?? base.axesY.length));
+  const axesX =
+    cx === base.axesX.length
+      ? base.axesX
+      : setAxisCount(base.axesX, cx, base.planWidth || 6000, "X");
+  const axesY =
+    cy === base.axesY.length
+      ? base.axesY
+      : setAxisCount(base.axesY, cy, base.planHeight || 4500, "Y");
+  return applyAxesToProject({
+    ...base,
+    axesX,
+    axesY,
+    info: { ...base.info, beamCountX: cx, beamCountY: cy },
+  });
 }
 
 /** Chèn thêm ô sàn theo phương X (thêm trục 1,2,3…). */
