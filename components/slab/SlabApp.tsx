@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Box,
+  Check,
+  ChevronRight,
   Download,
   FilePlus,
   FolderOpen,
@@ -23,7 +25,9 @@ import {
 import {
   applyAxesToProject,
   applyBeamCounts,
+  applyBeamDimsToAll,
   axisSpan,
+  equalizeAxisSpans,
   insertSlabBayX,
   insertSlabBayY,
   patchBeamOnAxis,
@@ -213,6 +217,111 @@ export function SlabApp() {
   function patchSelectedBeamDims(partial: { beamB?: number; beamH?: number; beamB1?: number }) {
     if (planSelection?.kind !== "beamSeg") return;
     persist(patchBeamOnAxis(project, planSelection.dir, planSelection.axisIndex, partial));
+  }
+
+  /** Danh sách đoạn dầm theo thứ tự trái → phải (dầm đứng trước, rồi dầm ngang). */
+  function listBeamSegsLeftToRight(): PlanSelection[] {
+    const xs = sortAxes(project.axesX);
+    const ys = sortAxes(project.axesY);
+    const list: PlanSelection[] = [];
+    for (let axisIndex = 0; axisIndex < xs.length; axisIndex++) {
+      for (let segIndex = 0; segIndex < ys.length - 1; segIndex++) {
+        list.push({ kind: "beamSeg", dir: "Y", axisIndex, segIndex });
+      }
+    }
+    for (let axisIndex = 0; axisIndex < ys.length; axisIndex++) {
+      for (let segIndex = 0; segIndex < xs.length - 1; segIndex++) {
+        list.push({ kind: "beamSeg", dir: "X", axisIndex, segIndex });
+      }
+    }
+    return list;
+  }
+
+  /** Danh sách ô sàn theo thứ tự trái → phải, dưới → trên. */
+  function listBaysLeftToRight(): PlanSelection[] {
+    const xs = sortAxes(project.axesX);
+    const ys = sortAxes(project.axesY);
+    const list: PlanSelection[] = [];
+    for (let iy = 0; iy < ys.length - 1; iy++) {
+      for (let ix = 0; ix < xs.length - 1; ix++) {
+        list.push({ kind: "bay", ix, iy });
+      }
+    }
+    return list;
+  }
+
+  function sameSelection(a: PlanSelection, b: PlanSelection) {
+    if (a.kind !== b.kind) return false;
+    if (a.kind === "bay" && b.kind === "bay") return a.ix === b.ix && a.iy === b.iy;
+    if (a.kind === "beamSeg" && b.kind === "beamSeg") {
+      return a.dir === b.dir && a.axisIndex === b.axisIndex && a.segIndex === b.segIndex;
+    }
+    return false;
+  }
+
+  /** Tiếp theo: dịch chọn dầm/ô sàn từ trái sang phải (lặp lại). */
+  function selectNextPlanItem() {
+    const preferBeams = !planSelection || planSelection.kind === "beamSeg";
+    const list = preferBeams ? listBeamSegsLeftToRight() : listBaysLeftToRight();
+    if (!list.length) {
+      setStatus("Chưa có đoạn dầm / ô sàn để chọn.");
+      return;
+    }
+    if (!planSelection) {
+      setPlanSelection(list[0]);
+      setStatus("Đã chọn phần tử đầu tiên (trái → phải).");
+      return;
+    }
+    const idx = list.findIndex((item) => sameSelection(item, planSelection));
+    const next = list[(idx < 0 ? 0 : idx + 1) % list.length];
+    setPlanSelection(next);
+    setStatus(
+      next.kind === "beamSeg"
+        ? `Đã chuyển sang đoạn dầm tiếp theo (${(idx < 0 ? 0 : idx + 1) % list.length + 1}/${list.length}).`
+        : `Đã chuyển sang ô sàn tiếp theo (${(idx < 0 ? 0 : idx + 1) % list.length + 1}/${list.length}).`,
+    );
+  }
+
+  /** Áp dụng thông số đang chọn cho các nhịp / dầm còn lại. */
+  function applySelectionToAllSpans() {
+    if (!planSelection) {
+      setStatus("Hãy chọn một đoạn dầm hoặc ô sàn trước.");
+      return;
+    }
+    if (planSelection.kind === "bay") {
+      const spans = selectedBaySpans();
+      if (!spans) return;
+      const next = applyAxesToProject({
+        ...project,
+        axesX: equalizeAxisSpans(project.axesX, spans.lx),
+        axesY: equalizeAxisSpans(project.axesY, spans.ly),
+      });
+      persist(next);
+      setStatus(`Đã áp dụng Lx=${Math.round(spans.lx)}, Ly=${Math.round(spans.ly)} cho mọi ô sàn.`);
+      return;
+    }
+    const info = selectedBeamSegInfo();
+    if (!info) return;
+    let next = applyBeamDimsToAll(project, {
+      beamB: info.B,
+      beamH: info.H,
+      beamB1: info.B1,
+    });
+    if (planSelection.dir === "Y") {
+      next = applyAxesToProject({
+        ...next,
+        axesY: equalizeAxisSpans(next.axesY, info.length),
+      });
+    } else {
+      next = applyAxesToProject({
+        ...next,
+        axesX: equalizeAxisSpans(next.axesX, info.length),
+      });
+    }
+    persist(next);
+    setStatus(
+      `Đã áp dụng L=${Math.round(info.length)}, B=${info.B}, H=${info.H}, B1=${info.B1} cho các nhịp/dầm.`,
+    );
   }
 
   function setPreset(layoutPreset: LayoutPreset) {
@@ -739,9 +848,33 @@ export function SlabApp() {
                         </div>
                       </>
                     )}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="success"
+                        size="sm"
+                        title="Chọn đoạn dầm / ô sàn tiếp theo (trái → phải)"
+                        onClick={selectNextPlanItem}
+                      >
+                        <ChevronRight /> Tiếp theo
+                      </Button>
+                      <Button variant="success" size="sm" onClick={applySelectionToAllSpans}>
+                        <Check /> Áp dụng cho các nhịp
+                      </Button>
+                    </div>
                   </div>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="success"
+                    size="sm"
+                    title="Chọn đoạn dầm tiếp theo từ trái sang phải"
+                    onClick={selectNextPlanItem}
+                  >
+                    <ChevronRight /> Tiếp theo
+                  </Button>
+                  <Button variant="success" size="sm" onClick={applySelectionToAllSpans}>
+                    <Check /> Áp dụng cho các nhịp
+                  </Button>
                   <Button variant="secondary" size="sm" className="text-amber-300" onClick={assignAllBeams}>
                     Gán toàn bộ dầm theo trục…
                   </Button>
@@ -1141,19 +1274,31 @@ export function SlabApp() {
         </div>
 
         <div className="flex min-h-0 flex-col overflow-hidden">
-          {(tab === "plan" || tab === "draw") && planSelection && (
-            <div className="shrink-0 border-b border-sky-800/60 bg-sky-950/40 px-3 py-2">
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <div className="text-xs font-semibold text-sky-300">
-                  {planSelection.kind === "bay" ? "Ô sàn đang chọn trên bản vẽ" : "Đoạn dầm đang chọn trên bản vẽ"}
+          {(tab === "plan" || tab === "draw") && (
+            <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/80 px-3 py-2">
+              {!planSelection && (
+                <div className="mb-1 text-[11px] text-zinc-500">
+                  Nhấp ô sàn / đoạn dầm trên bản vẽ, hoặc bấm{" "}
+                  <b className="text-emerald-400">Tiếp theo</b> để chọn lần lượt từ trái sang phải.
                 </div>
-                <Button size="sm" variant="secondary" onClick={() => setPlanSelection(null)}>
-                  Bỏ chọn
-                </Button>
-              </div>
-              {planSelection.kind === "bay" && selectedBaySpans() && (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <div className="col-span-2 text-[11px] text-zinc-400 sm:col-span-4">{selectedBaySpans()!.name}</div>
+              )}
+              {planSelection && (
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-sky-300">
+                    {planSelection.kind === "bay"
+                      ? "Ô sàn đang chọn trên bản vẽ"
+                      : "Đoạn dầm đang chọn trên bản vẽ"}
+                  </div>
+                  <Button size="sm" variant="secondary" onClick={() => setPlanSelection(null)}>
+                    Bỏ chọn
+                  </Button>
+                </div>
+              )}
+              {planSelection?.kind === "bay" && selectedBaySpans() && (
+                <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="col-span-2 text-[11px] text-zinc-400 sm:col-span-4">
+                    {selectedBaySpans()!.name}
+                  </div>
                   <Field label="Khoảng cách Lx (mm)">
                     <Input
                       type="number"
@@ -1170,9 +1315,11 @@ export function SlabApp() {
                   </Field>
                 </div>
               )}
-              {planSelection.kind === "beamSeg" && selectedBeamSegInfo() && (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                  <div className="col-span-2 text-[11px] text-zinc-400 sm:col-span-5">{selectedBeamSegInfo()!.name}</div>
+              {planSelection?.kind === "beamSeg" && selectedBeamSegInfo() && (
+                <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  <div className="col-span-2 text-[11px] text-zinc-400 sm:col-span-5">
+                    {selectedBeamSegInfo()!.name}
+                  </div>
                   <Field label="Khoảng cách L (mm)">
                     <Input
                       type="number"
@@ -1203,6 +1350,24 @@ export function SlabApp() {
                   </Field>
                 </div>
               )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="success"
+                  size="sm"
+                  title="Chọn đoạn dầm / ô sàn tiếp theo (trái → phải)"
+                  onClick={selectNextPlanItem}
+                >
+                  <ChevronRight /> Tiếp theo
+                </Button>
+                <Button
+                  variant="success"
+                  size="sm"
+                  disabled={!planSelection}
+                  onClick={applySelectionToAllSpans}
+                >
+                  <Check /> Áp dụng cho các nhịp
+                </Button>
+              </div>
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-hidden">

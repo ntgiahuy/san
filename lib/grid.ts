@@ -226,6 +226,42 @@ export function patchBeamOnAxis(
   return { ...project, beams };
 }
 
+/** Áp dụng B/H/B1 của một dầm cho toàn bộ dầm trên mặt bằng. */
+export function applyBeamDimsToAll(
+  project: SlabProject,
+  dims: { beamB: number; beamH: number; beamB1: number },
+): SlabProject {
+  const size = formatBeamSize(dims.beamB, dims.beamH);
+  const beams = (project.beams?.length ? project.beams : beamsFromAxes(project)).map((b) => ({
+    ...b,
+    size,
+    offset: dims.beamB1,
+  }));
+  const info = syncBeamInfo({
+    ...project.info,
+    beamB: dims.beamB,
+    beamH: dims.beamH,
+    beamB1: dims.beamB1,
+  });
+  return { ...project, info, beams };
+}
+
+/** Đặt cùng một nhịp (mm) cho mọi khoảng giữa trục theo phương X hoặc Y. */
+export function equalizeAxisSpans(
+  axes: GridAxis[],
+  spanMm: number,
+): GridAxis[] {
+  const sorted = sortAxes(axes);
+  if (sorted.length < 2) return sorted;
+  const span = Math.max(500, Math.round(spanMm) || 500);
+  let pos = sorted[0].pos;
+  return sorted.map((a, i) => {
+    if (i === 0) return a;
+    pos += span;
+    return { ...a, pos };
+  });
+}
+
 export function ensureAxes(project: SlabProject): SlabProject {
   const axesX =
     project.axesX && project.axesX.length >= 2
