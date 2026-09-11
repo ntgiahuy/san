@@ -167,6 +167,7 @@ export interface SlabProject {
 
 export type TabId =
   | "plan"
+  | "beams"
   | "draw"
   | "economy2"
   | "simple2"
@@ -176,10 +177,11 @@ export type TabId =
 
 export const TABS: { id: TabId; label: string }[] = [
   { id: "plan", label: "1. Thông tin sàn" },
-  { id: "draw", label: "2. Vẽ thép sàn" },
-  { id: "economy2", label: "3. Thép 2 lớp tiết kiệm" },
-  { id: "simple2", label: "4. Thép 2 lớp đơn giản" },
-  { id: "section", label: "5. Mặt cắt" },
-  { id: "model3d", label: "6. Mô hình 3D" },
+  { id: "beams", label: "2. Số liệu dầm" },
+  { id: "draw", label: "3. Vẽ thép sàn" },
+  { id: "economy2", label: "4. Thép 2 lớp tiết kiệm" },
+  { id: "simple2", label: "5. Thép 2 lớp đơn giản" },
+  { id: "section", label: "6. Mặt cắt" },
+  { id: "model3d", label: "7. Mô hình 3D" },
   { id: "info", label: "Thông tin xuất" },
 ];

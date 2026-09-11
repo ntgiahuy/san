@@ -619,19 +619,6 @@ export function SlabApp() {
                       onChange={(e) => patchInfo({ cover: Number(e.target.value) || 0 })}
                     />
                   </Field>
-                  <Field label="Tên dầm">
-                    <Input
-                      value={project.info.beamNamePrefix}
-                      onChange={(e) => patchInfo({ beamNamePrefix: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Chiều cao Text">
-                    <Input
-                      type="number"
-                      value={project.info.textHeight}
-                      onChange={(e) => patchInfo({ textHeight: Number(e.target.value) || 0 })}
-                    />
-                  </Field>
                   <Field label="Bề rộng sàn (mm)">
                     <Input
                       type="number"
@@ -651,6 +638,21 @@ export function SlabApp() {
                       type="number"
                       value={project.info.lowSlabDrop}
                       onChange={(e) => patchInfo({ lowSlabDrop: Number(e.target.value) || 0 })}
+                    />
+                  </Field>
+                </div>
+              </Panel>
+            </div>
+          )}
+
+          {tab === "beams" && (
+            <div className="flex flex-wrap gap-3">
+              <Panel title="2. Số liệu dầm" className="min-w-[300px] flex-1">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <Field label="Tên dầm">
+                    <Input
+                      value={project.info.beamNamePrefix}
+                      onChange={(e) => patchInfo({ beamNamePrefix: e.target.value })}
                     />
                   </Field>
                 </div>
@@ -893,13 +895,15 @@ export function SlabApp() {
                     Thống kê Dầm ({project.beams.length})
                   </Button>
                 </div>
+
               </Panel>
             </div>
           )}
 
+
           {tab === "draw" && (
             <div className="flex flex-wrap gap-3">
-              <Panel title="1. Vẽ thép sàn" className="min-w-[320px] flex-1">
+              <Panel title="3. Vẽ thép sàn" className="min-w-[320px] flex-1">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <Field label="Số hiệu thép">
                     <Input value={zoneForm.mark} onChange={(e) => setZoneForm({ ...zoneForm, mark: e.target.value })} />
@@ -1032,7 +1036,7 @@ export function SlabApp() {
           )}
 
           {tab === "economy2" && (
-            <Panel title="1. Bố trí thép 2 lớp tiết kiệm" className="max-w-3xl">
+            <Panel title="4. Bố trí thép 2 lớp tiết kiệm" className="max-w-3xl">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Field label="Thép lớp dưới">
                   <Input
@@ -1080,13 +1084,6 @@ export function SlabApp() {
                     onChange={(e) => persist({ ...project, economy2: { ...project.economy2, distToCenter: Number(e.target.value) || 1 } })}
                   />
                 </Field>
-                <Field label="Chiều cao Text">
-                  <Input
-                    type="number"
-                    value={project.economy2.textHeight}
-                    onChange={(e) => persist({ ...project, economy2: { ...project.economy2, textHeight: Number(e.target.value) || 0 } })}
-                  />
-                </Field>
               </div>
               <label className="mt-2 flex items-center gap-2 text-xs text-zinc-300">
                 <Checkbox
@@ -1111,7 +1108,7 @@ export function SlabApp() {
 
           {tab === "simple2" && (
             <div className="flex flex-wrap gap-3">
-              <Panel title="1. Bố trí thép 2 lớp đơn giản" className="min-w-[300px] flex-1">
+              <Panel title="5. Bố trí thép 2 lớp đơn giản" className="min-w-[300px] flex-1">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <Field label="Thép lớp dưới">
                     <Input
@@ -1137,13 +1134,6 @@ export function SlabApp() {
                       type="number"
                       value={project.simple2.topHook}
                       onChange={(e) => persist({ ...project, simple2: { ...project.simple2, topHook: Number(e.target.value) || 0 } })}
-                    />
-                  </Field>
-                  <Field label="Chiều cao Text thép">
-                    <Input
-                      type="number"
-                      value={project.simple2.textHeight}
-                      onChange={(e) => persist({ ...project, simple2: { ...project.simple2, textHeight: Number(e.target.value) || 0 } })}
                     />
                   </Field>
                 </div>
@@ -1190,7 +1180,7 @@ export function SlabApp() {
           )}
 
           {tab === "section" && (
-            <Panel title="5. Mặt cắt sàn" className="max-w-xl">
+            <Panel title="6. Mặt cắt sàn" className="max-w-xl">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Field label="Tên mặt cắt">
                   <Input
@@ -1223,7 +1213,7 @@ export function SlabApp() {
           )}
 
           {tab === "model3d" && (
-            <Panel title="2. Mô hình 3D" className="max-w-xl">
+            <Panel title="7. Mô hình 3D" className="max-w-xl">
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
@@ -1274,7 +1264,7 @@ export function SlabApp() {
         </div>
 
         <div className="flex min-h-0 flex-col overflow-hidden">
-          {(tab === "plan" || tab === "draw") && (
+          {(tab === "plan" || tab === "beams" || tab === "draw") && (
             <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/80 px-3 py-2">
               {!planSelection && (
                 <div className="mb-1 text-[11px] text-zinc-500">
@@ -1374,7 +1364,7 @@ export function SlabApp() {
             <SlabPreview
               project={project}
               show3d={project.show3d && tab === "model3d"}
-              interactive={tab === "plan" || tab === "draw"}
+              interactive={tab === "plan" || tab === "beams" || tab === "draw"}
               selection={planSelection}
               onSelect={setPlanSelection}
             />
