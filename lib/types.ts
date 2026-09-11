@@ -53,6 +53,8 @@ export interface PlanBeam {
   direction: RebarDir;
   /** Tim trục theo phương vuông góc với hướng dầm. */
   axis: number;
+  /** Id trục gắn với dầm (để giữ kích thước khi dựng lại lưới). */
+  axisId?: string;
   /** Đầu / cuối theo hướng dầm. */
   start: number;
   end: number;
@@ -62,6 +64,15 @@ export interface PlanBeam {
    */
   offset: number;
 }
+
+/**
+ * Đối tượng đang chọn trên mặt bằng:
+ * - bay: ô sàn giữa hai cặp trục
+ * - beamSeg: đoạn dầm giữa hai trục vuông góc
+ */
+export type PlanSelection =
+  | { kind: "bay"; ix: number; iy: number }
+  | { kind: "beamSeg"; dir: RebarDir; axisIndex: number; segIndex: number };
 
 export interface Opening {
   id: string;

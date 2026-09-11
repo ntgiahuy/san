@@ -149,40 +149,81 @@ export function setAxisCount(
   return out;
 }
 
+function parseSize(size: string): { b: number; h: number } {
+  const m = size.trim().toLowerCase().match(/^(\d+)\s*[x×]\s*(\d+)/);
+  return m ? { b: Number(m[1]), h: Number(m[2]) } : { b: 220, h: 500 };
+}
+
 export function beamsFromAxes(project: SlabProject): PlanBeam[] {
   const axesX = sortAxes(project.axesX ?? []);
   const axesY = sortAxes(project.axesY ?? []);
   const { planWidth: W, planHeight: Hplan } = planSizeFromAxes(axesX, axesY);
   const prefix = project.info.beamNamePrefix || "D";
   const { B, H, B1 } = beamDims(project.info);
-  const size = formatBeamSize(B, H);
+  const defaultSize = formatBeamSize(B, H);
+  const prev = project.beams ?? [];
+  const findPrev = (direction: PlanBeam["direction"], axisId: string, axis: number) =>
+    prev.find((b) => b.axisId === axisId) ||
+    prev.find((b) => b.direction === direction && Math.abs(b.axis - axis) < 0.5);
+
   const beams: PlanBeam[] = [];
   let n = 1;
   for (const ax of axesX) {
+    const old = findPrev("Y", ax.id, ax.pos);
+    const dims = old ? parseSize(old.size) : { b: B, h: H };
     beams.push({
-      id: uid("beam"),
-      name: `${prefix}${n++}`,
-      size,
+      id: old?.id ?? uid("beam"),
+      name: old?.name ?? `${prefix}${n++}`,
+      size: old ? formatBeamSize(dims.b, dims.h) : defaultSize,
       direction: "Y",
       axis: ax.pos,
+      axisId: ax.id,
       start: 0,
       end: Hplan,
-      offset: B1,
+      offset: Number.isFinite(old?.offset) ? (old!.offset as number) : B1,
     });
   }
   for (const ay of axesY) {
+    const old = findPrev("X", ay.id, ay.pos);
+    const dims = old ? parseSize(old.size) : { b: B, h: H };
     beams.push({
-      id: uid("beam"),
-      name: `${prefix}${n++}`,
-      size,
+      id: old?.id ?? uid("beam"),
+      name: old?.name ?? `${prefix}${n++}`,
+      size: old ? formatBeamSize(dims.b, dims.h) : defaultSize,
       direction: "X",
       axis: ay.pos,
+      axisId: ay.id,
       start: 0,
       end: W,
-      offset: B1,
+      offset: Number.isFinite(old?.offset) ? (old!.offset as number) : B1,
     });
   }
   return beams;
+}
+
+/** Cập nhật kích thước một dầm theo trục (giữ các dầm khác). */
+export function patchBeamOnAxis(
+  project: SlabProject,
+  dir: PlanBeam["direction"],
+  axisIndex: number,
+  dims: { beamB?: number; beamH?: number; beamB1?: number },
+): SlabProject {
+  const axes = sortAxes(dir === "Y" ? project.axesX : project.axesY);
+  const axis = axes[axisIndex];
+  if (!axis) return project;
+  const current = (project.beams ?? []).find(
+    (b) => b.axisId === axis.id || (b.direction === dir && Math.abs(b.axis - axis.pos) < 0.5),
+  );
+  const parsed = parseSize(current?.size ?? formatBeamSize(project.info.beamB, project.info.beamH));
+  const B = dims.beamB ?? parsed.b;
+  const H = dims.beamH ?? parsed.h;
+  const B1 = dims.beamB1 ?? current?.offset ?? Math.round(B / 2);
+  const size = formatBeamSize(B, H);
+  const beams = (project.beams?.length ? project.beams : beamsFromAxes(project)).map((b) => {
+    const match = b.axisId === axis.id || (b.direction === dir && Math.abs(b.axis - axis.pos) < 0.5);
+    return match ? { ...b, size, offset: B1, axisId: axis.id, axis: axis.pos } : b;
+  });
+  return { ...project, beams };
 }
 
 export function ensureAxes(project: SlabProject): SlabProject {

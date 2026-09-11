@@ -18,6 +18,7 @@ import { SlabPreview } from "@/components/slab/SlabPreview";
 import {
   computeModel,
   effectiveZones,
+  parseBeamSize,
 } from "@/lib/calc";
 import {
   applyAxesToProject,
@@ -25,6 +26,7 @@ import {
   axisSpan,
   insertSlabBayX,
   insertSlabBayY,
+  patchBeamOnAxis,
   removeAxis,
   renameAxis,
   setAxisSpan,
@@ -44,6 +46,7 @@ import {
   SPACING_OPTIONS,
   TABS,
   type LayoutPreset,
+  type PlanSelection,
   type RebarDir,
   type RebarLayer,
   type RebarZone,
@@ -82,6 +85,7 @@ export function SlabApp() {
   const [error, setError] = useState<string | null>(null);
   const [zoneForm, setZoneForm] = useState<RebarZone>(() => draftZone());
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [planSelection, setPlanSelection] = useState<PlanSelection | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -126,6 +130,89 @@ export function SlabApp() {
         ? applyBeamCounts(project, n, project.info.beamCountY)
         : applyBeamCounts(project, project.info.beamCountX, n),
     );
+  }
+
+  function selectedBaySpans() {
+    if (planSelection?.kind !== "bay") return null;
+    const xs = sortAxes(project.axesX);
+    const ys = sortAxes(project.axesY);
+    const { ix, iy } = planSelection;
+    if (ix < 0 || ix >= xs.length - 1 || iy < 0 || iy >= ys.length - 1) return null;
+    return {
+      lx: xs[ix + 1].pos - xs[ix].pos,
+      ly: ys[iy + 1].pos - ys[iy].pos,
+      name: `${xs[ix].name}-${xs[ix + 1].name} / ${ys[iy].name}-${ys[iy + 1].name}`,
+    };
+  }
+
+  function selectedBeamSegInfo() {
+    if (planSelection?.kind !== "beamSeg") return null;
+    const xs = sortAxes(project.axesX);
+    const ys = sortAxes(project.axesY);
+    const { dir, axisIndex, segIndex } = planSelection;
+    if (dir === "Y") {
+      const ax = xs[axisIndex];
+      if (!ax || segIndex < 0 || segIndex >= ys.length - 1) return null;
+      const beam = project.beams.find(
+        (b) => b.axisId === ax.id || (b.direction === "Y" && Math.abs(b.axis - ax.pos) < 0.5),
+      );
+      const parsed = parseBeamSize(beam?.size ?? project.info.beamSizeX);
+      return {
+        name: `${beam?.name ?? "D"} · trục ${ax.name} · ${ys[segIndex].name}–${ys[segIndex + 1].name}`,
+        length: ys[segIndex + 1].pos - ys[segIndex].pos,
+        B: parsed.b,
+        H: parsed.h,
+        B1: Number.isFinite(beam?.offset) ? (beam!.offset as number) : Math.round(parsed.b / 2),
+      };
+    }
+    const ay = ys[axisIndex];
+    if (!ay || segIndex < 0 || segIndex >= xs.length - 1) return null;
+    const beam = project.beams.find(
+      (b) => b.axisId === ay.id || (b.direction === "X" && Math.abs(b.axis - ay.pos) < 0.5),
+    );
+    const parsed = parseBeamSize(beam?.size ?? project.info.beamSizeY);
+    return {
+      name: `${beam?.name ?? "D"} · trục ${ay.name} · ${xs[segIndex].name}–${xs[segIndex + 1].name}`,
+      length: xs[segIndex + 1].pos - xs[segIndex].pos,
+      B: parsed.b,
+      H: parsed.h,
+      B1: Number.isFinite(beam?.offset) ? (beam!.offset as number) : Math.round(parsed.b / 2),
+    };
+  }
+
+  function patchSelectedBaySpan(which: "lx" | "ly", value: number) {
+    if (planSelection?.kind !== "bay") return;
+    const v = Math.max(500, Math.round(value) || 500);
+    if (which === "lx") {
+      persist(applyAxesToProject({ ...project, axesX: setAxisSpan(project.axesX, planSelection.ix + 1, v) }));
+    } else {
+      persist(applyAxesToProject({ ...project, axesY: setAxisSpan(project.axesY, planSelection.iy + 1, v) }));
+    }
+  }
+
+  function patchSelectedBeamLength(value: number) {
+    if (planSelection?.kind !== "beamSeg") return;
+    const v = Math.max(500, Math.round(value) || 500);
+    if (planSelection.dir === "Y") {
+      persist(
+        applyAxesToProject({
+          ...project,
+          axesY: setAxisSpan(project.axesY, planSelection.segIndex + 1, v),
+        }),
+      );
+    } else {
+      persist(
+        applyAxesToProject({
+          ...project,
+          axesX: setAxisSpan(project.axesX, planSelection.segIndex + 1, v),
+        }),
+      );
+    }
+  }
+
+  function patchSelectedBeamDims(partial: { beamB?: number; beamH?: number; beamB1?: number }) {
+    if (planSelection?.kind !== "beamSeg") return;
+    persist(patchBeamOnAxis(project, planSelection.dir, planSelection.axisIndex, partial));
   }
 
   function setPreset(layoutPreset: LayoutPreset) {
@@ -586,6 +673,74 @@ export function SlabApp() {
                     </Button>
                   </div>
                 </div>
+                {(planSelection?.kind === "bay" || planSelection?.kind === "beamSeg") && (
+                  <div className="mt-3 rounded border border-sky-700/60 bg-sky-950/30 p-2">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="text-xs font-semibold text-sky-300">
+                        {planSelection.kind === "bay" ? "Ô sàn đang chọn" : "Đoạn dầm đang chọn"}
+                      </div>
+                      <Button size="sm" variant="secondary" onClick={() => setPlanSelection(null)}>
+                        Bỏ chọn
+                      </Button>
+                    </div>
+                    {planSelection.kind === "bay" && selectedBaySpans() && (
+                      <>
+                        <p className="mb-2 text-[11px] text-zinc-400">{selectedBaySpans()!.name}</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Field label="Khoảng cách Lx (mm)">
+                            <Input
+                              type="number"
+                              value={Math.round(selectedBaySpans()!.lx)}
+                              onChange={(e) => patchSelectedBaySpan("lx", Number(e.target.value))}
+                            />
+                          </Field>
+                          <Field label="Khoảng cách Ly (mm)">
+                            <Input
+                              type="number"
+                              value={Math.round(selectedBaySpans()!.ly)}
+                              onChange={(e) => patchSelectedBaySpan("ly", Number(e.target.value))}
+                            />
+                          </Field>
+                        </div>
+                      </>
+                    )}
+                    {planSelection.kind === "beamSeg" && selectedBeamSegInfo() && (
+                      <>
+                        <p className="mb-2 text-[11px] text-zinc-400">{selectedBeamSegInfo()!.name}</p>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <Field label="Khoảng cách L (mm)">
+                            <Input
+                              type="number"
+                              value={Math.round(selectedBeamSegInfo()!.length)}
+                              onChange={(e) => patchSelectedBeamLength(Number(e.target.value))}
+                            />
+                          </Field>
+                          <Field label="Chiều cao H (mm)">
+                            <Input
+                              type="number"
+                              value={selectedBeamSegInfo()!.H}
+                              onChange={(e) => patchSelectedBeamDims({ beamH: Number(e.target.value) || 0 })}
+                            />
+                          </Field>
+                          <Field label="Chiều rộng B (mm)">
+                            <Input
+                              type="number"
+                              value={selectedBeamSegInfo()!.B}
+                              onChange={(e) => patchSelectedBeamDims({ beamB: Number(e.target.value) || 0 })}
+                            />
+                          </Field>
+                          <Field label="Lệch trục B1 (mm)">
+                            <Input
+                              type="number"
+                              value={selectedBeamSegInfo()!.B1}
+                              onChange={(e) => patchSelectedBeamDims({ beamB1: Number(e.target.value) || 0 })}
+                            />
+                          </Field>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button variant="secondary" size="sm" className="text-amber-300" onClick={assignAllBeams}>
                     Gán toàn bộ dầm theo trục…
@@ -986,7 +1141,13 @@ export function SlabApp() {
         </div>
 
         <div className="min-h-0 overflow-hidden">
-          <SlabPreview project={project} show3d={project.show3d && tab === "model3d"} />
+          <SlabPreview
+            project={project}
+            show3d={project.show3d && tab === "model3d"}
+            interactive={tab === "plan" || tab === "draw"}
+            selection={planSelection}
+            onSelect={setPlanSelection}
+          />
         </div>
       </div>
     </div>
