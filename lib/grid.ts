@@ -593,3 +593,76 @@ export function patchBeam(
   const beams = (project.beams ?? []).map((b) => (b.id === beamId ? { ...b, ...patch } : b));
   return { ...project, beams };
 }
+
+/**
+ * Đổi bề rộng / chiều dài sàn: giữ số trục & số dầm, chia đều vị trí theo kích thước mới.
+ * - Đổi bề rộng → chia đều trục X + dầm đứng (Y) trên 0…W; kéo dài dầm ngang full W
+ * - Đổi chiều dài → chia đều trục Y + dầm ngang (X) trên 0…H; kéo dài dầm đứng full H
+ * Chỉ tái bố trí phương đang đổi (giữ nhịp lệch của phương kia).
+ */
+export function setPlanSize(
+  project: SlabProject,
+  widthMm: number,
+  heightMm: number,
+): SlabProject {
+  const prevW = project.planWidth || 0;
+  const prevH = project.planHeight || 0;
+  const W = Math.max(500, Math.round(widthMm) || 500);
+  const H = Math.max(500, Math.round(heightMm) || 500);
+  const widthChanged = W !== prevW;
+  const heightChanged = H !== prevH;
+  if (!widthChanged && !heightChanged) return project;
+
+  const axesX = widthChanged
+    ? setAxisCount(project.axesX ?? [], project.axesX?.length ?? 2, W, "X")
+    : sortAxes(project.axesX ?? []);
+  const axesY = heightChanged
+    ? setAxisCount(project.axesY ?? [], project.axesY?.length ?? 2, H, "Y")
+    : sortAxes(project.axesY ?? []);
+
+  const beamsY = (project.beams ?? [])
+    .filter((b) => b.direction === "Y")
+    .sort((a, b) => a.axis - b.axis);
+  const beamsX = (project.beams ?? [])
+    .filter((b) => b.direction === "X")
+    .sort((a, b) => a.axis - b.axis);
+
+  const place = (n: number, i: number, total: number) =>
+    n <= 1 ? Math.round(total / 2) : Math.round((total * i) / (n - 1));
+
+  const yPos = new Map(
+    beamsY.map((b, i) => [
+      b.id,
+      {
+        ...b,
+        axis: widthChanged ? place(beamsY.length, i, W) : b.axis,
+        start: 0,
+        end: H,
+      },
+    ]),
+  );
+  const xPos = new Map(
+    beamsX.map((b, i) => [
+      b.id,
+      {
+        ...b,
+        axis: heightChanged ? place(beamsX.length, i, H) : b.axis,
+        start: 0,
+        end: W,
+      },
+    ]),
+  );
+
+  const beams = (project.beams ?? []).map((b) =>
+    b.direction === "Y" ? (yPos.get(b.id) ?? b) : (xPos.get(b.id) ?? b),
+  );
+
+  return {
+    ...project,
+    planWidth: W,
+    planHeight: H,
+    axesX,
+    axesY,
+    beams,
+  };
+}

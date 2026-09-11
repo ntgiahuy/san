@@ -37,6 +37,7 @@ import {
   removeBeam,
   renameAxis,
   setAxisSpan,
+  setPlanSize,
   sortAxes,
   syncBeamInfo,
 } from "@/lib/grid";
@@ -603,14 +604,18 @@ export function SlabApp() {
                     <Input
                       type="number"
                       value={project.planWidth}
-                      onChange={(e) => persist({ ...project, planWidth: Number(e.target.value) || 0 })}
+                      onChange={(e) =>
+                        persist(setPlanSize(project, Number(e.target.value) || 0, project.planHeight))
+                      }
                     />
                   </Field>
                   <Field label="Chiều dài sàn" unit="mm">
                     <Input
                       type="number"
                       value={project.planHeight}
-                      onChange={(e) => persist({ ...project, planHeight: Number(e.target.value) || 0 })}
+                      onChange={(e) =>
+                        persist(setPlanSize(project, project.planWidth, Number(e.target.value) || 0))
+                      }
                     />
                   </Field>
                   <Field label="Chênh cao độ sàn thấp" unit="mm">
