@@ -23,8 +23,8 @@ export function SlabPreview({
   const axesX = useMemo(() => sortAxes(project.axesX ?? []), [project.axesX]);
   const axesY = useMemo(() => sortAxes(project.axesY ?? []), [project.axesY]);
 
-  const W = 960;
-  const H = 640;
+  const W = 640;
+  const H = 420;
   const pad = 40;
   const sx = (W - pad * 2) / Math.max(project.planWidth, 1);
   const sy = (H - pad * 2) / Math.max(project.planHeight, 1);
