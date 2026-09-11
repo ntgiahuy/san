@@ -161,18 +161,25 @@ export function SlabPreview({
             strokeWidth={active ? 2 : 1}
             pointerEvents="none"
           />
-          {active && (
-            <text
-              x={X(ax.pos) + (bw - b1) * s + 4}
-              y={Y((y0 + y1) / 2)}
-              fill="#6ee7b7"
-              fontSize="10"
-              fontWeight="700"
-              pointerEvents="none"
-            >
-              {beam?.name ?? `D${axisIndex + 1}`} · L={Math.round(y1 - y0)}
-            </text>
-          )}
+          {active && (() => {
+            const tx = X(ax.pos) + (bw - b1) * s + 10;
+            const ty = Y((y0 + y1) / 2);
+            return (
+              <text
+                x={tx}
+                y={ty}
+                fill="#6ee7b7"
+                fontSize="10"
+                fontWeight="700"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                transform={`rotate(-90 ${tx} ${ty})`}
+                pointerEvents="none"
+              >
+                {beam?.name ?? `D${axisIndex + 1}`} · L={Math.round(y1 - y0)}
+              </text>
+            );
+          })()}
         </g>,
       );
     }

@@ -261,7 +261,7 @@ function drawBeam(
     const y1 = toY(Math.max(b.start, b.end));
     const y2 = toY(Math.min(b.start, b.end));
     rect(ctx, xAxis - b1, y1, bw * s, y2 - y1, 0.85);
-    textSimple(ctx, `${b.name}(${b.size})`, xAxis - b1 + bw * s + 3, (y1 + y2) / 2, 5.5);
+    textVertical(ctx, `${b.name}(${b.size})`, xAxis - b1 + bw * s + 8, (y1 + y2) / 2, 5.5, false);
   } else {
     const yAxis = toY(b.axis);
     const x1 = toX(Math.min(b.start, b.end));
