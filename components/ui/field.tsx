@@ -17,11 +17,25 @@ export function Field({
   wide?: boolean;
 }) {
   return (
-    <label className={cn("flex min-w-0 items-center gap-2", className)}>
-      <span className="shrink-0 text-[12px] leading-tight text-zinc-300">{label}</span>
-      <div className={cn("flex min-w-0 items-center gap-1.5", wide ? "flex-1" : "w-auto")}>
-        {children}
-        {unit ? <span className="shrink-0 text-[12px] text-zinc-400">{unit}</span> : null}
+    <label
+      className={cn(
+        "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1",
+        className,
+      )}
+    >
+      <span className="min-w-0 text-[12px] leading-tight text-zinc-400">{label}</span>
+      <div className="flex min-w-0 items-center justify-end gap-1.5">
+        <div
+          className={cn(
+            "min-w-0",
+            wide ? "w-[9.5rem] [&_input]:w-full [&_select]:w-full" : "w-[5.5rem] [&_input]:w-full [&_select]:w-full",
+          )}
+        >
+          {children}
+        </div>
+        {unit ? <span className="w-7 shrink-0 text-[12px] text-zinc-400">{unit}</span> : (
+          <span className="w-7 shrink-0" aria-hidden />
+        )}
       </div>
     </label>
   );
