@@ -1,8 +1,111 @@
 import type { GridAxis, PlanBeam, SlabInfo, SlabProject } from "./types";
 import { uid } from "./utils";
 
+/** Thép sàn thụt vào từ da dầm (mm). */
+export const SLAB_REBAR_FACE_INSET_MM = 50;
+
 export function formatBeamSize(b: number, h: number): string {
   return `${Math.max(1, Math.round(b))}x${Math.max(1, Math.round(h))}`;
+}
+
+export type BeamSection = { bw: number; b1: number };
+
+function parseSizeStr(size?: string): { b: number; h: number } {
+  const m = (size ?? "").trim().toLowerCase().match(/^(\d+)\s*[x×]\s*(\d+)/);
+  return m ? { b: Number(m[1]), h: Number(m[2]) } : { b: 220, h: 500 };
+}
+
+/** Tiết diện dầm theo phương + trục (B1: mép thấp/trái → tim). */
+export function beamSectionOnAxis(
+  project: SlabProject,
+  beamDir: PlanBeam["direction"],
+  axis: GridAxis,
+): BeamSection {
+  const fallback =
+    beamDir === "Y"
+      ? project.info.beamSizeX || formatBeamSize(project.info.beamB, project.info.beamH)
+      : project.info.beamSizeY || formatBeamSize(project.info.beamB, project.info.beamH);
+  const beam = (project.beams ?? []).find(
+    (b) => b.axisId === axis.id || (b.direction === beamDir && Math.abs(b.axis - axis.pos) < 0.5),
+  );
+  const { b: bw } = parseSizeStr(beam?.size ?? fallback);
+  const b1 = Number.isFinite(beam?.offset)
+    ? (beam!.offset as number)
+    : Number.isFinite(project.info.beamB1)
+      ? project.info.beamB1
+      : bw / 2;
+  return { bw, b1 };
+}
+
+/**
+ * Da dầm (mép ngoài) theo trục vuông góc với phương dầm.
+ * B1 đo từ mép lo (trái/dưới) đến tim → [axis - b1, axis + (bw - b1)].
+ */
+export function beamOuterFaces(axisPos: number, sec: BeamSection): { lo: number; hi: number } {
+  return { lo: axisPos - sec.b1, hi: axisPos + (sec.bw - sec.b1) };
+}
+
+/** Đoạn dầm đứng (phương Y): kéo đầu đến da dầm ngang tại hai đầu. */
+export function verticalBeamSegExtent(
+  project: SlabProject,
+  y0: number,
+  y1: number,
+  axesY: GridAxis[],
+): { yLo: number; yHi: number } {
+  const loAxis = Math.min(y0, y1);
+  const hiAxis = Math.max(y0, y1);
+  const aLo = axesY.find((a) => Math.abs(a.pos - loAxis) < 0.5) ?? { id: "", name: "", pos: loAxis };
+  const aHi = axesY.find((a) => Math.abs(a.pos - hiAxis) < 0.5) ?? { id: "", name: "", pos: hiAxis };
+  const faceLo = beamOuterFaces(loAxis, beamSectionOnAxis(project, "X", aLo));
+  const faceHi = beamOuterFaces(hiAxis, beamSectionOnAxis(project, "X", aHi));
+  return { yLo: faceLo.lo, yHi: faceHi.hi };
+}
+
+/** Đoạn dầm ngang (phương X): kéo đầu đến da dầm đứng tại hai đầu. */
+export function horizontalBeamSegExtent(
+  project: SlabProject,
+  x0: number,
+  x1: number,
+  axesX: GridAxis[],
+): { xLo: number; xHi: number } {
+  const loAxis = Math.min(x0, x1);
+  const hiAxis = Math.max(x0, x1);
+  const aLo = axesX.find((a) => Math.abs(a.pos - loAxis) < 0.5) ?? { id: "", name: "", pos: loAxis };
+  const aHi = axesX.find((a) => Math.abs(a.pos - hiAxis) < 0.5) ?? { id: "", name: "", pos: hiAxis };
+  const faceLo = beamOuterFaces(loAxis, beamSectionOnAxis(project, "Y", aLo));
+  const faceHi = beamOuterFaces(hiAxis, beamSectionOnAxis(project, "Y", aHi));
+  return { xLo: faceLo.lo, xHi: faceHi.hi };
+}
+
+/** Phạm vi thép sàn trong ô: nằm trên dầm, thụt 50mm từ da dầm ngoài. */
+export function bayRebarExtent(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+  ix: number,
+  iy: number,
+  insetMm = SLAB_REBAR_FACE_INSET_MM,
+): { x0: number; x1: number; y0: number; y1: number; mx: number; my: number } {
+  const ax0 = axesX[ix];
+  const ax1 = axesX[ix + 1];
+  const ay0 = axesY[iy];
+  const ay1 = axesY[iy + 1];
+  const left = beamOuterFaces(ax0.pos, beamSectionOnAxis(project, "Y", ax0));
+  const right = beamOuterFaces(ax1.pos, beamSectionOnAxis(project, "Y", ax1));
+  const bottom = beamOuterFaces(ay0.pos, beamSectionOnAxis(project, "X", ay0));
+  const top = beamOuterFaces(ay1.pos, beamSectionOnAxis(project, "X", ay1));
+  const x0 = left.lo + insetMm;
+  const x1 = right.hi - insetMm;
+  const y0 = bottom.lo + insetMm;
+  const y1 = top.hi - insetMm;
+  return {
+    x0,
+    x1: Math.max(x0, x1),
+    y0,
+    y1: Math.max(y0, y1),
+    mx: (ax0.pos + ax1.pos) / 2,
+    my: (ay0.pos + ay1.pos) / 2,
+  };
 }
 
 /** Đọc B / H / B1 từ info (kèm fallback chuỗi beamSize cũ). */

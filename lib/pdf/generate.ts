@@ -8,6 +8,12 @@ import {
   type ComputedSlabModel,
   type ScheduleRow,
 } from "../calc";
+import {
+  bayRebarExtent,
+  beamOuterFaces,
+  beamSectionOnAxis,
+  sortAxes,
+} from "../grid";
 import type { PlanBeam, RebarZone, SlabProject } from "../types";
 
 const PAGE_W = 1684;
@@ -188,21 +194,14 @@ function drawPlan(
     textSimple(ctx, o.name || "Ô", x + (o.w * s) / 2, y + (o.h * s) / 2, 6, false, "center");
   }
 
-  // Mỗi ô sàn: 1 cây phương X + 1 cây phương Y qua tim
-  const axesX = [...(project.axesX ?? [])].sort((a, b) => a.pos - b.pos);
-  const axesY = [...(project.axesY ?? [])].sort((a, b) => a.pos - b.pos);
+  // Mỗi ô sàn: 1 cây phương X + 1 cây phương Y qua tim; thụt 50mm từ da dầm
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
   for (let ix = 0; ix < axesX.length - 1; ix++) {
     for (let iy = 0; iy < axesY.length - 1; iy++) {
-      const x0 = axesX[ix].pos;
-      const x1 = axesX[ix + 1].pos;
-      const y0 = axesY[iy].pos;
-      const y1 = axesY[iy + 1].pos;
-      const mx = (x0 + x1) / 2;
-      const my = (y0 + y1) / 2;
-      const insetX = Math.min(120, Math.max(40, (x1 - x0) * 0.08));
-      const insetY = Math.min(120, Math.max(40, (y1 - y0) * 0.08));
-      line(ctx, toX(x0 + insetX), toY(my), toX(x1 - insetX), toY(my), 0.55);
-      line(ctx, toX(mx), toY(y0 + insetY), toX(mx), toY(y1 - insetY), 0.55);
+      const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
+      line(ctx, toX(x0), toY(my), toX(x1), toY(my), 0.55);
+      line(ctx, toX(mx), toY(y0), toX(mx), toY(y1), 0.55);
     }
   }
 
@@ -254,20 +253,45 @@ function drawBeam(
   toY: (mm: number) => number,
   s: number,
 ) {
+  const { project } = ctx;
   const { b: bw } = parseBeamSize(b.size);
-  const b1 = (Number.isFinite(b.offset) ? b.offset : bw / 2) * s;
+  const b1 = Number.isFinite(b.offset) ? (b.offset as number) : bw / 2;
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+
   if (b.direction === "Y") {
+    // Kéo đầu đến da dầm ngang tại hai đầu
+    const yStartAxis = Math.min(b.start, b.end);
+    const yEndAxis = Math.max(b.start, b.end);
+    const a0 =
+      axesY.find((a) => Math.abs(a.pos - yStartAxis) < 0.5) ??
+      ({ id: "", name: "", pos: yStartAxis } as const);
+    const a1 =
+      axesY.find((a) => Math.abs(a.pos - yEndAxis) < 0.5) ??
+      ({ id: "", name: "", pos: yEndAxis } as const);
+    const yLo = beamOuterFaces(a0.pos, beamSectionOnAxis(project, "X", a0)).lo;
+    const yHi = beamOuterFaces(a1.pos, beamSectionOnAxis(project, "X", a1)).hi;
     const xAxis = toX(b.axis);
-    const y1 = toY(Math.max(b.start, b.end));
-    const y2 = toY(Math.min(b.start, b.end));
-    rect(ctx, xAxis - b1, y1, bw * s, y2 - y1, 0.85);
-    textVertical(ctx, `${b.name}(${b.size})`, xAxis - b1 + bw * s + 8, (y1 + y2) / 2, 5.5, false);
+    const yTop = toY(yHi);
+    const yBot = toY(yLo);
+    rect(ctx, xAxis - b1 * s, yTop, bw * s, yBot - yTop, 0.85);
+    textVertical(ctx, `${b.name}(${b.size})`, xAxis - b1 * s + bw * s + 8, (yTop + yBot) / 2, 5.5, false);
   } else {
+    const xStartAxis = Math.min(b.start, b.end);
+    const xEndAxis = Math.max(b.start, b.end);
+    const a0 =
+      axesX.find((a) => Math.abs(a.pos - xStartAxis) < 0.5) ??
+      ({ id: "", name: "", pos: xStartAxis } as const);
+    const a1 =
+      axesX.find((a) => Math.abs(a.pos - xEndAxis) < 0.5) ??
+      ({ id: "", name: "", pos: xEndAxis } as const);
+    const xLo = beamOuterFaces(a0.pos, beamSectionOnAxis(project, "Y", a0)).lo;
+    const xHi = beamOuterFaces(a1.pos, beamSectionOnAxis(project, "Y", a1)).hi;
     const yAxis = toY(b.axis);
-    const x1 = toX(Math.min(b.start, b.end));
-    const x2 = toX(Math.max(b.start, b.end));
-    rect(ctx, x1, yAxis - b1, x2 - x1, bw * s, 0.85);
-    textSimple(ctx, `${b.name}(${b.size})`, (x1 + x2) / 2, yAxis - b1 - 8, 5.5, false, "center");
+    // B1 từ mép dưới → tim: đỉnh da = axis + (bw - b1)
+    const yTop = toY(b.axis + (bw - b1));
+    rect(ctx, toX(xLo), yTop, (xHi - xLo) * s, bw * s, 0.85);
+    textSimple(ctx, `${b.name}(${b.size})`, toX((xStartAxis + xEndAxis) / 2), yTop - 8, 5.5, false, "center");
   }
 }
 

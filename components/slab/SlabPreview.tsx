@@ -1,8 +1,14 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
-import { effectiveZones, parseBeamSize } from "@/lib/calc";
-import { sortAxes } from "@/lib/grid";
+import { effectiveZones } from "@/lib/calc";
+import {
+  bayRebarExtent,
+  beamSectionOnAxis,
+  horizontalBeamSegExtent,
+  sortAxes,
+  verticalBeamSegExtent,
+} from "@/lib/grid";
 import type { PlanSelection, SlabProject } from "@/lib/types";
 
 export function SlabPreview({
@@ -119,16 +125,16 @@ export function SlabPreview({
   }
 
   const beamSegNodes: ReactNode[] = [];
-  // Dầm đứng trên trục X — đoạn giữa các trục Y
+  // Dầm đứng trên trục X — đoạn giữa các trục Y (đầu dầm = da dầm ngang)
   axesX.forEach((ax, axisIndex) => {
+    const { bw, b1 } = beamSectionOnAxis(project, "Y", ax);
     const beam = project.beams.find(
       (b) => b.axisId === ax.id || (b.direction === "Y" && Math.abs(b.axis - ax.pos) < 0.5),
     );
-    const { b: bw } = parseBeamSize(beam?.size ?? project.info.beamSizeX);
-    const b1 = Number.isFinite(beam?.offset) ? (beam!.offset as number) : bw / 2;
     for (let segIndex = 0; segIndex < axesY.length - 1; segIndex++) {
       const y0 = axesY[segIndex].pos;
       const y1 = axesY[segIndex + 1].pos;
+      const { yLo, yHi } = verticalBeamSegExtent(project, y0, y1, axesY);
       const active =
         selection?.kind === "beamSeg" &&
         selection.dir === "Y" &&
@@ -136,12 +142,11 @@ export function SlabPreview({
         selection.segIndex === segIndex;
       beamSegNodes.push(
         <g key={`by-${axisIndex}-${segIndex}`}>
-          {/* Vùng click rộng hơn bề rộng dầm để dễ chọn */}
           <rect
             x={X(ax.pos) - Math.max(b1, bw / 2) * s - 10}
-            y={Y(Math.max(y0, y1))}
+            y={Y(yHi)}
             width={Math.max(bw * s, 18) + 20}
-            height={Math.abs(y1 - y0) * s}
+            height={(yHi - yLo) * s}
             fill="transparent"
             className={interactive ? "cursor-pointer" : undefined}
             pointerEvents={interactive ? "all" : "none"}
@@ -153,9 +158,9 @@ export function SlabPreview({
           />
           <rect
             x={X(ax.pos) - b1 * s}
-            y={Y(Math.max(y0, y1))}
+            y={Y(yHi)}
             width={bw * s}
-            height={Math.abs(y1 - y0) * s}
+            height={(yHi - yLo) * s}
             fill={active ? "rgba(52,211,153,0.45)" : "#27272a"}
             stroke={active ? "#34d399" : "#a1a1aa"}
             strokeWidth={active ? 2 : 1}
@@ -184,16 +189,16 @@ export function SlabPreview({
       );
     }
   });
-  // Dầm ngang trên trục Y — đoạn giữa các trục X
+  // Dầm ngang trên trục Y — đoạn giữa các trục X (đầu dầm = da dầm đứng)
   axesY.forEach((ay, axisIndex) => {
+    const { bw, b1 } = beamSectionOnAxis(project, "X", ay);
     const beam = project.beams.find(
       (b) => b.axisId === ay.id || (b.direction === "X" && Math.abs(b.axis - ay.pos) < 0.5),
     );
-    const { b: bw } = parseBeamSize(beam?.size ?? project.info.beamSizeY);
-    const b1 = Number.isFinite(beam?.offset) ? (beam!.offset as number) : bw / 2;
     for (let segIndex = 0; segIndex < axesX.length - 1; segIndex++) {
       const x0 = axesX[segIndex].pos;
       const x1 = axesX[segIndex + 1].pos;
+      const { xLo, xHi } = horizontalBeamSegExtent(project, x0, x1, axesX);
       const active =
         selection?.kind === "beamSeg" &&
         selection.dir === "X" &&
@@ -202,9 +207,9 @@ export function SlabPreview({
       beamSegNodes.push(
         <g key={`bx-${axisIndex}-${segIndex}`}>
           <rect
-            x={X(Math.min(x0, x1))}
-            y={Y(ay.pos) - Math.max(b1, bw / 2) * s - 10}
-            width={Math.abs(x1 - x0) * s}
+            x={X(xLo)}
+            y={Y(ay.pos + (bw - b1)) - 10}
+            width={(xHi - xLo) * s}
             height={Math.max(bw * s, 18) + 20}
             fill="transparent"
             className={interactive ? "cursor-pointer" : undefined}
@@ -216,9 +221,9 @@ export function SlabPreview({
             }}
           />
           <rect
-            x={X(Math.min(x0, x1))}
-            y={Y(ay.pos) - b1 * s}
-            width={Math.abs(x1 - x0) * s}
+            x={X(xLo)}
+            y={Y(ay.pos + (bw - b1))}
+            width={(xHi - xLo) * s}
             height={bw * s}
             fill={active ? "rgba(52,211,153,0.45)" : "#27272a"}
             stroke={active ? "#34d399" : "#a1a1aa"}
@@ -228,7 +233,7 @@ export function SlabPreview({
           {active && (
             <text
               x={X((x0 + x1) / 2)}
-              y={Y(ay.pos) - b1 * s - 6}
+              y={Y(ay.pos + (bw - b1)) - 6}
               textAnchor="middle"
               fill="#6ee7b7"
               fontSize="10"
@@ -314,35 +319,26 @@ export function SlabPreview({
             </g>
           ))}
           {beamSegNodes}
-          {/* Mỗi ô sàn: chỉ 1 cây phương X + 1 cây phương Y qua tim ô */}
-          {axesX.slice(0, -1).flatMap((ax, ix) =>
-            axesY.slice(0, -1).map((ay, iy) => {
-              const x0 = ax.pos;
-              const x1 = axesX[ix + 1].pos;
-              const y0 = ay.pos;
-              const y1 = axesY[iy + 1].pos;
-              const mx = (x0 + x1) / 2;
-              const my = (y0 + y1) / 2;
-              const insetX = Math.min(120, Math.max(40, (x1 - x0) * 0.08));
-              const insetY = Math.min(120, Math.max(40, (y1 - y0) * 0.08));
+          {/* Mỗi ô sàn: 1 cây X + 1 cây Y qua tim; nằm trên dầm, thụt 50mm từ da dầm */}
+          {axesX.slice(0, -1).flatMap((_, ix) =>
+            axesY.slice(0, -1).map((_, iy) => {
+              const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
               return (
                 <g key={`rebar-bay-${ix}-${iy}`} pointerEvents="none">
-                  {/* Phương X — thanh ngang qua tim */}
                   <line
-                    x1={X(x0 + insetX)}
+                    x1={X(x0)}
                     y1={Y(my)}
-                    x2={X(x1 - insetX)}
+                    x2={X(x1)}
                     y2={Y(my)}
                     stroke="#fbbf24"
                     strokeWidth="1.4"
                     opacity="0.95"
                   />
-                  {/* Phương Y — thanh đứng qua tim */}
                   <line
                     x1={X(mx)}
-                    y1={Y(y0 + insetY)}
+                    y1={Y(y0)}
                     x2={X(mx)}
-                    y2={Y(y1 - insetY)}
+                    y2={Y(y1)}
                     stroke="#fbbf24"
                     strokeWidth="1.4"
                     opacity="0.95"
