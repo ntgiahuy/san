@@ -740,9 +740,102 @@ export function SlabApp() {
             </div>
           )}
 
+          {tab === "axes" && (
+            <div className="flex flex-col gap-3">
+              <Panel title="2. Số liệu trục" className="min-w-0 w-full">
+                <div className="flex flex-col gap-3">
+                  <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">
+                    <div className="mb-2 text-xs font-semibold text-sky-300">Trục phương X</div>
+                    <div className="space-y-1.5">
+                      {sortAxes(project.axesX ?? []).map((ax, i) => (
+                        <div key={ax.id} className="flex flex-wrap items-center gap-1.5">
+                          <Input
+                            className="w-14"
+                            value={ax.name}
+                            onChange={(e) => updateAxesX(renameAxis(project.axesX, ax.id, e.target.value))}
+                          />
+                          <Input
+                            type="number"
+                            title={i === 0 ? "Vị trí gốc (mm)" : "Khoảng cách từ trục trước (mm)"}
+                            value={axisSpan(project.axesX, i)}
+                            onChange={(e) => {
+                              const v = Number(e.target.value) || 0;
+                              if (i === 0) {
+                                const sorted = sortAxes(project.axesX);
+                                const delta = v - sorted[0].pos;
+                                updateAxesX(sorted.map((a) => ({ ...a, pos: a.pos + delta })));
+                              } else {
+                                updateAxesX(setAxisSpan(project.axesX, i, v));
+                              }
+                            }}
+                          />
+                          <span className="text-[11px] text-zinc-500">mm</span>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            className="px-1"
+                            disabled={(project.axesX?.length ?? 0) <= 2}
+                            onClick={() => updateAxesX(removeAxis(project.axesX, ax.id))}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <Button size="sm" variant="secondary" className="mt-2 w-full" onClick={addSlabBayX}>
+                      <Plus /> Thêm trục X
+                    </Button>
+                  </div>
+                  <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">
+                    <div className="mb-2 text-xs font-semibold text-sky-300">Trục phương Y</div>
+                    <div className="space-y-1.5">
+                      {sortAxes(project.axesY ?? []).map((ay, i) => (
+                        <div key={ay.id} className="flex flex-wrap items-center gap-1.5">
+                          <Input
+                            className="w-14"
+                            value={ay.name}
+                            onChange={(e) => updateAxesY(renameAxis(project.axesY, ay.id, e.target.value))}
+                          />
+                          <Input
+                            type="number"
+                            title={i === 0 ? "Vị trí gốc (mm)" : "Khoảng cách từ trục trước (mm)"}
+                            value={axisSpan(project.axesY, i)}
+                            onChange={(e) => {
+                              const v = Number(e.target.value) || 0;
+                              if (i === 0) {
+                                const sorted = sortAxes(project.axesY);
+                                const delta = v - sorted[0].pos;
+                                updateAxesY(sorted.map((a) => ({ ...a, pos: a.pos + delta })));
+                              } else {
+                                updateAxesY(setAxisSpan(project.axesY, i, v));
+                              }
+                            }}
+                          />
+                          <span className="text-[11px] text-zinc-500">mm</span>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            className="px-1"
+                            disabled={(project.axesY?.length ?? 0) <= 2}
+                            onClick={() => updateAxesY(removeAxis(project.axesY, ay.id))}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <Button size="sm" variant="secondary" className="mt-2 w-full" onClick={addSlabBayY}>
+                      <Plus /> Thêm trục Y
+                    </Button>
+                  </div>
+                </div>
+              </Panel>
+            </div>
+          )}
+
           {tab === "beams" && (
             <div className="flex flex-col gap-3">
-              <Panel title="2. Số liệu dầm" className="min-w-0 w-full">
+              <Panel title="3. Số liệu dầm" className="min-w-0 w-full">
                 <div className="flex flex-col gap-2.5">
                   <Field label="Tên dầm" wide>
                     <Input
@@ -796,90 +889,6 @@ export function SlabApp() {
                     B1: từ mép trái dầm đến tim trục. 0 = tim trùng mép trái, B/2 = cân giữa. Kích thước
                     dầm: {project.info.beamSizeX || `${project.info.beamB}x${project.info.beamH}`}.
                   </p>
-                </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">
-                    <div className="mb-2 text-xs font-semibold text-sky-300">Trục phương X (1, 2, 3…)</div>
-                    <div className="space-y-1.5">
-                      {sortAxes(project.axesX ?? []).map((ax, i) => (
-                        <div key={ax.id} className="flex flex-wrap items-center gap-1.5">
-                          <Input
-                            className="w-14"
-                            value={ax.name}
-                            onChange={(e) => updateAxesX(renameAxis(project.axesX, ax.id, e.target.value))}
-                          />
-                          <Input
-                            type="number"
-                            title={i === 0 ? "Vị trí gốc (mm)" : "Khoảng cách từ trục trước (mm)"}
-                            value={axisSpan(project.axesX, i)}
-                            onChange={(e) => {
-                              const v = Number(e.target.value) || 0;
-                              if (i === 0) {
-                                const sorted = sortAxes(project.axesX);
-                                const delta = v - sorted[0].pos;
-                                updateAxesX(sorted.map((a) => ({ ...a, pos: a.pos + delta })));
-                              } else {
-                                updateAxesX(setAxisSpan(project.axesX, i, v));
-                              }
-                            }}
-                          />
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            className="px-1"
-                            disabled={(project.axesX?.length ?? 0) <= 2}
-                            onClick={() => updateAxesX(removeAxis(project.axesX, ax.id))}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                    <Button size="sm" variant="secondary" className="mt-2 w-full" onClick={addSlabBayX}>
-                      <Plus /> Chèn sàn / thêm trục X
-                    </Button>
-                  </div>
-                  <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">
-                    <div className="mb-2 text-xs font-semibold text-sky-300">Trục phương Y (A, B, C…)</div>
-                    <div className="space-y-1.5">
-                      {sortAxes(project.axesY ?? []).map((ay, i) => (
-                        <div key={ay.id} className="flex flex-wrap items-center gap-1.5">
-                          <Input
-                            className="w-14"
-                            value={ay.name}
-                            onChange={(e) => updateAxesY(renameAxis(project.axesY, ay.id, e.target.value))}
-                          />
-                          <Input
-                            type="number"
-                            title={i === 0 ? "Vị trí gốc (mm)" : "Khoảng cách từ trục trước (mm)"}
-                            value={axisSpan(project.axesY, i)}
-                            onChange={(e) => {
-                              const v = Number(e.target.value) || 0;
-                              if (i === 0) {
-                                const sorted = sortAxes(project.axesY);
-                                const delta = v - sorted[0].pos;
-                                updateAxesY(sorted.map((a) => ({ ...a, pos: a.pos + delta })));
-                              } else {
-                                updateAxesY(setAxisSpan(project.axesY, i, v));
-                              }
-                            }}
-                          />
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            className="px-1"
-                            disabled={(project.axesY?.length ?? 0) <= 2}
-                            onClick={() => updateAxesY(removeAxis(project.axesY, ay.id))}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                    <Button size="sm" variant="secondary" className="mt-2 w-full" onClick={addSlabBayY}>
-                      <Plus /> Chèn sàn / thêm trục Y
-                    </Button>
-                  </div>
                 </div>
                 {(planSelection?.kind === "bay" || planSelection?.kind === "beamSeg") && (
                   <div className="mt-3 rounded border border-sky-700/60 bg-sky-950/30 p-2">
@@ -1000,7 +1009,7 @@ export function SlabApp() {
 
           {tab === "draw" && (
             <div className="flex flex-col gap-3">
-              <Panel title="3. Vẽ thép sàn" className="min-w-0 flex-1">
+              <Panel title="4. Vẽ thép sàn" className="min-w-0 flex-1">
                 <div className="flex flex-col gap-2.5">
                   <Field label="Số hiệu thép" wide>
                     <Input value={zoneForm.mark} onChange={(e) => setZoneForm({ ...zoneForm, mark: e.target.value })} />
@@ -1134,7 +1143,7 @@ export function SlabApp() {
           )}
 
           {tab === "economy2" && (
-            <Panel title="4. Bố trí thép 2 lớp tiết kiệm" className="max-w-3xl">
+            <Panel title="5. Bố trí thép 2 lớp tiết kiệm" className="max-w-3xl">
               <div className="flex flex-col gap-2.5">
                 <Field label="Thép lớp dưới">
                   <Input
@@ -1206,7 +1215,7 @@ export function SlabApp() {
 
           {tab === "simple2" && (
             <div className="flex flex-col gap-3">
-              <Panel title="5. Bố trí thép 2 lớp đơn giản" className="min-w-0 flex-1">
+              <Panel title="6. Bố trí thép 2 lớp đơn giản" className="min-w-0 flex-1">
                 <div className="flex flex-col gap-2.5">
                   <Field label="Thép lớp dưới">
                     <Input
@@ -1278,7 +1287,7 @@ export function SlabApp() {
           )}
 
           {tab === "section" && (
-            <Panel title="6. Mặt cắt sàn" className="max-w-xl">
+            <Panel title="7. Mặt cắt sàn" className="max-w-xl">
               <div className="flex flex-col gap-2.5">
                 <Field label="Tên mặt cắt">
                   <Input
@@ -1311,7 +1320,7 @@ export function SlabApp() {
           )}
 
           {tab === "model3d" && (
-            <Panel title="7. Mô hình 3D" className="max-w-xl">
+            <Panel title="8. Mô hình 3D" className="max-w-xl">
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
@@ -1362,7 +1371,7 @@ export function SlabApp() {
         </div>
 
         <div className="flex min-h-0 flex-col overflow-hidden">
-          {(tab === "beams" || tab === "draw") && (
+          {(tab === "axes" || tab === "beams" || tab === "draw") && (
             <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/80 px-3 py-2">
               {!planSelection && (
                 <div className="mb-1 text-[11px] text-zinc-500">
@@ -1462,7 +1471,7 @@ export function SlabApp() {
             <SlabPreview
               project={project}
               show3d={project.show3d && tab === "model3d"}
-              interactive={tab === "plan" || tab === "beams" || tab === "draw"}
+              interactive={tab === "plan" || tab === "axes" || tab === "beams" || tab === "draw"}
               selection={planSelection}
               onSelect={setPlanSelection}
             />
