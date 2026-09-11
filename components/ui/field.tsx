@@ -13,14 +13,21 @@ export function Field({
   className?: string;
   /** Đơn vị hiển thị sau ô nhập (vd. mm). */
   unit?: string;
-  /** Ô nhập rộng hơn (tên, ghi chú…). */
+  /** Ô nhập rộng hơn (tên, ghi chú…). Mặc định full-width trong cột. */
   wide?: boolean;
 }) {
   return (
-    <label className={cn("flex min-w-0 items-center gap-2", className)}>
-      <span className="shrink-0 text-[12px] leading-tight text-zinc-300">{label}</span>
-      <div className={cn("flex min-w-0 items-center gap-1.5", wide ? "flex-1" : "w-auto")}>
-        {children}
+    <label className={cn("flex w-full min-w-0 flex-col gap-1", className)}>
+      <span className="text-[12px] leading-tight text-zinc-400">{label}</span>
+      <div className="flex w-full min-w-0 items-center gap-1.5">
+        <div
+          className={cn(
+            "min-w-0 [&_input]:w-full [&_select]:w-full",
+            wide === false ? "w-auto" : "flex-1",
+          )}
+        >
+          {children}
+        </div>
         {unit ? <span className="shrink-0 text-[12px] text-zinc-400">{unit}</span> : null}
       </div>
     </label>

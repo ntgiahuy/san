@@ -589,12 +589,12 @@ export function SlabApp() {
         ))}
       </nav>
 
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(140px,32vh)_minmax(0,1fr)] lg:grid-rows-1 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
-        <div className="min-h-0 overflow-auto border-b border-zinc-800 bg-zinc-900 p-3 lg:border-b-0 lg:border-r">
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(160px,36vh)] lg:grid-rows-1 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
+        <div className="order-2 min-h-0 overflow-auto border-t border-zinc-800 bg-zinc-900 p-3 lg:order-2 lg:border-t-0 lg:border-l">
           {tab === "plan" && (
-            <div className="flex flex-wrap gap-3">
-              <Panel title="1. Thông tin sàn" className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex flex-col gap-3">
+              <Panel title="1. Thông tin sàn" className="min-w-0 w-full">
+                <div className="flex flex-col gap-2.5">
                   <Field label="Tên sàn">
                     <Input value={project.info.name} onChange={(e) => patchInfo({ name: e.target.value })} />
                   </Field>
@@ -662,8 +662,8 @@ export function SlabApp() {
                     </div>
                   )}
                   {planSelection?.kind === "bay" && selectedBaySpans() && (
-                    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                      <div className="basis-full text-[11px] text-zinc-400">
+                    <div className="mb-2 flex flex-col gap-2.5">
+                      <div className="text-[11px] text-zinc-400">
                         {selectedBaySpans()!.name}
                       </div>
                       <Field label="Khoảng cách Lx" unit="mm">
@@ -683,8 +683,8 @@ export function SlabApp() {
                     </div>
                   )}
                   {planSelection?.kind === "beamSeg" && selectedBeamSegInfo() && (
-                    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                      <div className="basis-full text-[11px] text-zinc-400">
+                    <div className="mb-2 flex flex-col gap-2.5">
+                      <div className="text-[11px] text-zinc-400">
                         {selectedBeamSegInfo()!.name}
                       </div>
                       <Field label="Khoảng cách L" unit="mm">
@@ -741,9 +741,9 @@ export function SlabApp() {
           )}
 
           {tab === "beams" && (
-            <div className="flex flex-wrap gap-3">
-              <Panel title="2. Số liệu dầm" className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex flex-col gap-3">
+              <Panel title="2. Số liệu dầm" className="min-w-0 w-full">
+                <div className="flex flex-col gap-2.5">
                   <Field label="Tên dầm">
                     <Input
                       value={project.info.beamNamePrefix}
@@ -753,7 +753,7 @@ export function SlabApp() {
                 </div>
                 <div className="mt-3 rounded border border-zinc-700 bg-zinc-950/60 p-2">
                   <div className="mb-2 text-xs font-semibold text-sky-300">Số liệu dầm</div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="flex flex-col gap-2.5">
                     <Field label="Số lượng dầm theo phương X">
                       <Input
                         type="number"
@@ -894,7 +894,7 @@ export function SlabApp() {
                     {planSelection.kind === "bay" && selectedBaySpans() && (
                       <>
                         <p className="mb-2 text-[11px] text-zinc-400">{selectedBaySpans()!.name}</p>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <div className="flex flex-col gap-2.5">
                           <Field label="Khoảng cách Lx" unit="mm">
                             <Input
                               type="number"
@@ -915,7 +915,7 @@ export function SlabApp() {
                     {planSelection.kind === "beamSeg" && selectedBeamSegInfo() && (
                       <>
                         <p className="mb-2 text-[11px] text-zinc-400">{selectedBeamSegInfo()!.name}</p>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <div className="flex flex-col gap-2.5">
                           <Field label="Khoảng cách L" unit="mm">
                             <Input
                               type="number"
@@ -999,9 +999,9 @@ export function SlabApp() {
 
 
           {tab === "draw" && (
-            <div className="flex flex-wrap gap-3">
-              <Panel title="3. Vẽ thép sàn" className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex flex-col gap-3">
+              <Panel title="3. Vẽ thép sàn" className="min-w-0 w-full">
+                <div className="flex flex-col gap-2.5">
                   <Field label="Số hiệu thép">
                     <Input value={zoneForm.mark} onChange={(e) => setZoneForm({ ...zoneForm, mark: e.target.value })} />
                   </Field>
@@ -1014,7 +1014,7 @@ export function SlabApp() {
                   </Field>
                   <Field label="Đường kính thép">
                     <select
-                      className="h-7 w-auto min-w-[4.5rem] shrink-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
+                      className="h-7 w-full min-w-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
                       value={zoneForm.dia}
                       onChange={(e) => setZoneForm({ ...zoneForm, dia: Number(e.target.value) })}
                     >
@@ -1025,7 +1025,7 @@ export function SlabApp() {
                   </Field>
                   <Field label="Khoảng rải thép (a)">
                     <select
-                      className="h-7 w-auto min-w-[4.5rem] shrink-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
+                      className="h-7 w-full min-w-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
                       value={zoneForm.spacing}
                       onChange={(e) => setZoneForm({ ...zoneForm, spacing: Number(e.target.value) })}
                     >
@@ -1064,7 +1064,7 @@ export function SlabApp() {
                   </Field>
                   <Field label="Lớp thép">
                     <select
-                      className="h-7 w-auto min-w-[4.5rem] shrink-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
+                      className="h-7 w-full min-w-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
                       value={zoneForm.layer}
                       onChange={(e) => setZoneForm({ ...zoneForm, layer: e.target.value as RebarLayer })}
                     >
@@ -1075,7 +1075,7 @@ export function SlabApp() {
                   </Field>
                   <Field label="Phương">
                     <select
-                      className="h-7 w-auto min-w-[4.5rem] shrink-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
+                      className="h-7 w-full min-w-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
                       value={zoneForm.direction}
                       onChange={(e) => setZoneForm({ ...zoneForm, direction: e.target.value as RebarDir })}
                     >
@@ -1135,7 +1135,7 @@ export function SlabApp() {
 
           {tab === "economy2" && (
             <Panel title="4. Bố trí thép 2 lớp tiết kiệm" className="max-w-3xl">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex flex-col gap-2.5">
                 <Field label="Thép lớp dưới">
                   <Input
                     value={project.economy2.bottomSpec}
@@ -1205,9 +1205,9 @@ export function SlabApp() {
           )}
 
           {tab === "simple2" && (
-            <div className="flex flex-wrap gap-3">
-              <Panel title="5. Bố trí thép 2 lớp đơn giản" className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex flex-col gap-3">
+              <Panel title="5. Bố trí thép 2 lớp đơn giản" className="min-w-0 w-full">
+                <div className="flex flex-col gap-2.5">
                   <Field label="Thép lớp dưới">
                     <Input
                       value={project.simple2.bottomSpec}
@@ -1279,7 +1279,7 @@ export function SlabApp() {
 
           {tab === "section" && (
             <Panel title="6. Mặt cắt sàn" className="max-w-xl">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex flex-col gap-2.5">
                 <Field label="Tên mặt cắt">
                   <Input
                     value={project.sections[0]?.name ?? "1"}
@@ -1344,7 +1344,7 @@ export function SlabApp() {
 
           {tab === "info" && (
             <Panel title="Thông tin xuất PDF" className="max-w-xl">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex flex-col gap-2.5">
                 <Field label="Cấp bê tông">
                   <Input value={project.info.concreteGrade} onChange={(e) => patchInfo({ concreteGrade: e.target.value })} />
                 </Field>
@@ -1361,7 +1361,7 @@ export function SlabApp() {
           )}
         </div>
 
-        <div className="flex min-h-0 flex-col overflow-hidden">
+        <div className="order-1 flex min-h-0 flex-col overflow-hidden">
           {(tab === "beams" || tab === "draw") && (
             <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/80 px-3 py-2">
               {!planSelection && (
@@ -1383,8 +1383,8 @@ export function SlabApp() {
                 </div>
               )}
               {planSelection?.kind === "bay" && selectedBaySpans() && (
-                <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <div className="basis-full text-[11px] text-zinc-400">
+                <div className="mb-2 flex flex-col gap-2.5">
+                  <div className="text-[11px] text-zinc-400">
                     {selectedBaySpans()!.name}
                   </div>
                   <Field label="Khoảng cách Lx" unit="mm">
@@ -1404,8 +1404,8 @@ export function SlabApp() {
                 </div>
               )}
               {planSelection?.kind === "beamSeg" && selectedBeamSegInfo() && (
-                <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <div className="basis-full text-[11px] text-zinc-400">
+                <div className="mb-2 flex flex-col gap-2.5">
+                  <div className="text-[11px] text-zinc-400">
                     {selectedBeamSegInfo()!.name}
                   </div>
                   <Field label="Khoảng cách L" unit="mm">
