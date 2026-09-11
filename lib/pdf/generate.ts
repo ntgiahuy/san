@@ -188,6 +188,24 @@ function drawPlan(
     textSimple(ctx, o.name || "Ô", x + (o.w * s) / 2, y + (o.h * s) / 2, 6, false, "center");
   }
 
+  // Mỗi ô sàn: 1 cây phương X + 1 cây phương Y qua tim
+  const axesX = [...(project.axesX ?? [])].sort((a, b) => a.pos - b.pos);
+  const axesY = [...(project.axesY ?? [])].sort((a, b) => a.pos - b.pos);
+  for (let ix = 0; ix < axesX.length - 1; ix++) {
+    for (let iy = 0; iy < axesY.length - 1; iy++) {
+      const x0 = axesX[ix].pos;
+      const x1 = axesX[ix + 1].pos;
+      const y0 = axesY[iy].pos;
+      const y1 = axesY[iy + 1].pos;
+      const mx = (x0 + x1) / 2;
+      const my = (y0 + y1) / 2;
+      const insetX = Math.min(120, Math.max(40, (x1 - x0) * 0.08));
+      const insetY = Math.min(120, Math.max(40, (y1 - y0) * 0.08));
+      line(ctx, toX(x0 + insetX), toY(my), toX(x1 - insetX), toY(my), 0.55);
+      line(ctx, toX(mx), toY(y0 + insetY), toX(mx), toY(y1 - insetY), 0.55);
+    }
+  }
+
   for (const z of zones) {
     const zx1 = toX(Math.min(z.x1, z.x2));
     const zx2 = toX(Math.max(z.x1, z.x2));
@@ -202,7 +220,6 @@ function drawPlan(
       borderWidth: 0.45,
       borderDashArray: [3, 2],
     });
-    drawZoneBars(ctx, z, toX, toY, s);
     textSimple(
       ctx,
       `${z.mark} Ø${z.dia}a${z.spacing}`,
@@ -251,30 +268,6 @@ function drawBeam(
     const x2 = toX(Math.max(b.start, b.end));
     rect(ctx, x1, yAxis - b1, x2 - x1, bw * s, 0.85);
     textSimple(ctx, `${b.name}(${b.size})`, (x1 + x2) / 2, yAxis - b1 - 8, 5.5, false, "center");
-  }
-}
-
-function drawZoneBars(
-  ctx: Ctx,
-  z: RebarZone,
-  toX: (mm: number) => number,
-  toY: (mm: number) => number,
-  s: number,
-) {
-  const x1 = Math.min(z.x1, z.x2) + z.cover;
-  const x2 = Math.max(z.x1, z.x2) - z.cover;
-  const y1 = Math.min(z.y1, z.y2) + z.cover;
-  const y2 = Math.max(z.y1, z.y2) - z.cover;
-  if (x2 <= x1 || y2 <= y1) return;
-  const step = Math.max(z.spacing, 50);
-  if (z.direction === "X") {
-    for (let y = y1; y <= y2 + 0.1; y += step) {
-      line(ctx, toX(x1), toY(y), toX(x2), toY(y), 0.35);
-    }
-  } else {
-    for (let x = x1; x <= x2 + 0.1; x += step) {
-      line(ctx, toX(x), toY(y1), toX(x), toY(y2), 0.35);
-    }
   }
 }
 

@@ -307,6 +307,43 @@ export function SlabPreview({
             </g>
           ))}
           {beamSegNodes}
+          {/* Mỗi ô sàn: chỉ 1 cây phương X + 1 cây phương Y qua tim ô */}
+          {axesX.slice(0, -1).flatMap((ax, ix) =>
+            axesY.slice(0, -1).map((ay, iy) => {
+              const x0 = ax.pos;
+              const x1 = axesX[ix + 1].pos;
+              const y0 = ay.pos;
+              const y1 = axesY[iy + 1].pos;
+              const mx = (x0 + x1) / 2;
+              const my = (y0 + y1) / 2;
+              const insetX = Math.min(120, Math.max(40, (x1 - x0) * 0.08));
+              const insetY = Math.min(120, Math.max(40, (y1 - y0) * 0.08));
+              return (
+                <g key={`rebar-bay-${ix}-${iy}`} pointerEvents="none">
+                  {/* Phương X — thanh ngang qua tim */}
+                  <line
+                    x1={X(x0 + insetX)}
+                    y1={Y(my)}
+                    x2={X(x1 - insetX)}
+                    y2={Y(my)}
+                    stroke="#fbbf24"
+                    strokeWidth="1.4"
+                    opacity="0.95"
+                  />
+                  {/* Phương Y — thanh đứng qua tim */}
+                  <line
+                    x1={X(mx)}
+                    y1={Y(y0 + insetY)}
+                    x2={X(mx)}
+                    y2={Y(y1 - insetY)}
+                    stroke="#fbbf24"
+                    strokeWidth="1.4"
+                    opacity="0.95"
+                  />
+                </g>
+              );
+            }),
+          )}
           {zones.map((z) => {
             const x1 = Math.min(z.x1, z.x2);
             const x2 = Math.max(z.x1, z.x2);
@@ -314,39 +351,6 @@ export function SlabPreview({
             const y2 = Math.max(z.y1, z.y2);
             const color =
               z.layer === "top" ? "#fbbf24" : z.layer === "structural" ? "#a78bfa" : "#34d399";
-            const lines: ReactNode[] = [];
-            const step = Math.max(z.spacing, 80);
-            if (z.direction === "X") {
-              for (let y = y1 + z.cover; y <= y2 - z.cover; y += step) {
-                lines.push(
-                  <line
-                    key={`${z.id}-y${y}`}
-                    x1={X(x1 + z.cover)}
-                    y1={Y(y)}
-                    x2={X(x2 - z.cover)}
-                    y2={Y(y)}
-                    stroke={color}
-                    strokeWidth="0.9"
-                    opacity="0.85"
-                  />,
-                );
-              }
-            } else {
-              for (let x = x1 + z.cover; x <= x2 - z.cover; x += step) {
-                lines.push(
-                  <line
-                    key={`${z.id}-x${x}`}
-                    x1={X(x)}
-                    y1={Y(y1 + z.cover)}
-                    x2={X(x)}
-                    y2={Y(y2 - z.cover)}
-                    stroke={color}
-                    strokeWidth="0.9"
-                    opacity="0.85"
-                  />,
-                );
-              }
-            }
             return (
               <g key={z.id} pointerEvents="none">
                 <rect
@@ -358,11 +362,11 @@ export function SlabPreview({
                   stroke={color}
                   strokeDasharray="4 3"
                   strokeWidth="1"
+                  opacity="0.7"
                 />
-                {lines}
                 <text
                   x={X((x1 + x2) / 2)}
-                  y={Y((y1 + y2) / 2)}
+                  y={Y((y1 + y2) / 2) - 8}
                   textAnchor="middle"
                   fill={color}
                   fontSize="11"
