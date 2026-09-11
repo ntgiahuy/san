@@ -4,11 +4,10 @@ import { useMemo, type ReactNode } from "react";
 import { effectiveZones } from "@/lib/calc";
 import {
   bayRebarExtent,
-  beamSectionOnAxis,
-  horizontalBeamSegExtent,
+  beamDrawRange,
   sortAxes,
-  verticalBeamSegExtent,
 } from "@/lib/grid";
+import { parseBeamSize } from "@/lib/calc";
 import type { PlanSelection, SlabProject } from "@/lib/types";
 
 export function SlabPreview({
@@ -124,51 +123,43 @@ export function SlabPreview({
     }
   }
 
-  const beamSegNodes: ReactNode[] = [];
-  // Dầm đứng trên trục X — đoạn giữa các trục Y (đầu dầm = da dầm ngang)
-  axesX.forEach((ax, axisIndex) => {
-    const { bw, b1 } = beamSectionOnAxis(project, "Y", ax);
-    const beam = project.beams.find(
-      (b) => b.axisId === ax.id || (b.direction === "Y" && Math.abs(b.axis - ax.pos) < 0.5),
-    );
-    for (let segIndex = 0; segIndex < axesY.length - 1; segIndex++) {
-      const y0 = axesY[segIndex].pos;
-      const y1 = axesY[segIndex + 1].pos;
-      const { yLo, yHi } = verticalBeamSegExtent(project, y0, y1, axesY);
-      const active =
-        selection?.kind === "beamSeg" &&
-        selection.dir === "Y" &&
-        selection.axisIndex === axisIndex &&
-        selection.segIndex === segIndex;
-      beamSegNodes.push(
-        <g key={`by-${axisIndex}-${segIndex}`}>
+  const beamNodes: ReactNode[] = [];
+  // Vẽ từng dầm trong danh sách — độc lập với lưới trục
+  for (const beam of project.beams ?? []) {
+    const { b: bw } = parseBeamSize(beam.size);
+    const b1 = Number.isFinite(beam.offset) ? (beam.offset as number) : bw / 2;
+    const { lo, hi } = beamDrawRange(project, beam);
+    const active = selection?.kind === "beam" && selection.beamId === beam.id;
+    if (beam.direction === "Y") {
+      beamNodes.push(
+        <g key={beam.id}>
           <rect
-            x={X(ax.pos) - Math.max(b1, bw / 2) * s - 10}
-            y={Y(yHi)}
+            x={X(beam.axis) - Math.max(b1, bw / 2) * s - 10}
+            y={Y(hi)}
             width={Math.max(bw * s, 18) + 20}
-            height={(yHi - yLo) * s}
+            height={(hi - lo) * s}
             fill="transparent"
             className={interactive ? "cursor-pointer" : undefined}
             pointerEvents={interactive ? "all" : "none"}
             onClick={(e) => {
               if (!interactive || !onSelect) return;
               e.stopPropagation();
-              onSelect({ kind: "beamSeg", dir: "Y", axisIndex, segIndex });
+              onSelect({ kind: "beam", beamId: beam.id });
             }}
           />
           <rect
-            x={X(ax.pos) - b1 * s}
-            y={Y(yHi)}
+            x={X(beam.axis) - b1 * s}
+            y={Y(hi)}
             width={bw * s}
-            height={(yHi - yLo) * s}
+            height={(hi - lo) * s}
             fill={active ? "rgba(52,211,153,0.45)" : "#27272a"}
             stroke={active ? "#34d399" : "#a1a1aa"}
             strokeWidth={active ? 2 : 1}
             pointerEvents="none"
           />
           {active && (() => {
-            const tx = X(ax.pos) + (bw - b1) * s + 10;
-            const ty = Y((y0 + y1) / 2);
+            const tx = X(beam.axis) + (bw - b1) * s + 10;
+            const ty = Y((lo + hi) / 2);
             return (
               <text
                 x={tx}
@@ -181,35 +172,19 @@ export function SlabPreview({
                 transform={`rotate(-90 ${tx} ${ty})`}
                 pointerEvents="none"
               >
-                {beam?.name ?? `D${axisIndex + 1}`} · L={Math.round(y1 - y0)}
+                {beam.name} · L={Math.round(Math.abs(beam.end - beam.start))}
               </text>
             );
           })()}
         </g>,
       );
-    }
-  });
-  // Dầm ngang trên trục Y — đoạn giữa các trục X (đầu dầm = da dầm đứng)
-  axesY.forEach((ay, axisIndex) => {
-    const { bw, b1 } = beamSectionOnAxis(project, "X", ay);
-    const beam = project.beams.find(
-      (b) => b.axisId === ay.id || (b.direction === "X" && Math.abs(b.axis - ay.pos) < 0.5),
-    );
-    for (let segIndex = 0; segIndex < axesX.length - 1; segIndex++) {
-      const x0 = axesX[segIndex].pos;
-      const x1 = axesX[segIndex + 1].pos;
-      const { xLo, xHi } = horizontalBeamSegExtent(project, x0, x1, axesX);
-      const active =
-        selection?.kind === "beamSeg" &&
-        selection.dir === "X" &&
-        selection.axisIndex === axisIndex &&
-        selection.segIndex === segIndex;
-      beamSegNodes.push(
-        <g key={`bx-${axisIndex}-${segIndex}`}>
+    } else {
+      beamNodes.push(
+        <g key={beam.id}>
           <rect
-            x={X(xLo)}
-            y={Y(ay.pos + (bw - b1)) - 10}
-            width={(xHi - xLo) * s}
+            x={X(lo)}
+            y={Y(beam.axis + (bw - b1)) - 10}
+            width={(hi - lo) * s}
             height={Math.max(bw * s, 18) + 20}
             fill="transparent"
             className={interactive ? "cursor-pointer" : undefined}
@@ -217,13 +192,13 @@ export function SlabPreview({
             onClick={(e) => {
               if (!interactive || !onSelect) return;
               e.stopPropagation();
-              onSelect({ kind: "beamSeg", dir: "X", axisIndex, segIndex });
+              onSelect({ kind: "beam", beamId: beam.id });
             }}
           />
           <rect
-            x={X(xLo)}
-            y={Y(ay.pos + (bw - b1))}
-            width={(xHi - xLo) * s}
+            x={X(lo)}
+            y={Y(beam.axis + (bw - b1))}
+            width={(hi - lo) * s}
             height={bw * s}
             fill={active ? "rgba(52,211,153,0.45)" : "#27272a"}
             stroke={active ? "#34d399" : "#a1a1aa"}
@@ -232,21 +207,22 @@ export function SlabPreview({
           />
           {active && (
             <text
-              x={X((x0 + x1) / 2)}
-              y={Y(ay.pos + (bw - b1)) - 6}
+              x={X((lo + hi) / 2)}
+              y={Y(beam.axis + (bw - b1)) - 6}
               textAnchor="middle"
               fill="#6ee7b7"
               fontSize="10"
               fontWeight="700"
               pointerEvents="none"
             >
-              {beam?.name ?? `D`} · L={Math.round(x1 - x0)}
+              {beam.name} · L={Math.round(Math.abs(beam.end - beam.start))}
             </text>
           )}
         </g>,
       );
     }
-  });
+  }
+
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-zinc-950">
@@ -318,7 +294,7 @@ export function SlabPreview({
               </text>
             </g>
           ))}
-          {beamSegNodes}
+          {beamNodes}
           {/* Mỗi ô sàn: 1 cây X + 1 cây Y qua tim; nằm trên dầm, thụt 50mm từ da dầm */}
           {axesX.slice(0, -1).flatMap((_, ix) =>
             axesY.slice(0, -1).map((_, iy) => {
@@ -391,12 +367,8 @@ export function SlabPreview({
           ? selection
             ? selection.kind === "bay"
               ? `Ô sàn đang chọn: trục ${axesX[selection.ix]?.name ?? "?"}–${axesX[selection.ix + 1]?.name ?? "?"} / ${axesY[selection.iy]?.name ?? "?"}–${axesY[selection.iy + 1]?.name ?? "?"}`
-              : `Đoạn dầm đang chọn: phương ${selection.dir} · trục ${
-                  selection.dir === "Y"
-                    ? axesX[selection.axisIndex]?.name
-                    : axesY[selection.axisIndex]?.name
-                }`
-            : "Nhấp vào ô sàn hoặc đoạn dầm trên bản vẽ để chọn và sửa khoảng cách / kích thước."
+              : `Dầm đang chọn: ${project.beams.find((b) => b.id === selection.beamId)?.name ?? selection.beamId}`
+            : "Nhấp vào ô sàn hoặc dầm trên bản vẽ để chọn và sửa."
           : `${project.info.name} · ${project.beams.length} dầm · ${axesX.length - 1}×${axesY.length - 1} ô`}
       </div>
     </div>

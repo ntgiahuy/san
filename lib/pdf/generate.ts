@@ -10,6 +10,7 @@ import {
 } from "../calc";
 import {
   bayRebarExtent,
+  beamDrawRange,
   beamOuterFaces,
   beamSectionOnAxis,
   sortAxes,
@@ -256,42 +257,18 @@ function drawBeam(
   const { project } = ctx;
   const { b: bw } = parseBeamSize(b.size);
   const b1 = Number.isFinite(b.offset) ? (b.offset as number) : bw / 2;
-  const axesX = sortAxes(project.axesX ?? []);
-  const axesY = sortAxes(project.axesY ?? []);
+  const { lo, hi } = beamDrawRange(project, b);
 
   if (b.direction === "Y") {
-    // Kéo đầu đến da dầm ngang tại hai đầu
-    const yStartAxis = Math.min(b.start, b.end);
-    const yEndAxis = Math.max(b.start, b.end);
-    const a0 =
-      axesY.find((a) => Math.abs(a.pos - yStartAxis) < 0.5) ??
-      ({ id: "", name: "", pos: yStartAxis } as const);
-    const a1 =
-      axesY.find((a) => Math.abs(a.pos - yEndAxis) < 0.5) ??
-      ({ id: "", name: "", pos: yEndAxis } as const);
-    const yLo = beamOuterFaces(a0.pos, beamSectionOnAxis(project, "X", a0)).lo;
-    const yHi = beamOuterFaces(a1.pos, beamSectionOnAxis(project, "X", a1)).hi;
     const xAxis = toX(b.axis);
-    const yTop = toY(yHi);
-    const yBot = toY(yLo);
+    const yTop = toY(hi);
+    const yBot = toY(lo);
     rect(ctx, xAxis - b1 * s, yTop, bw * s, yBot - yTop, 0.85);
     textVertical(ctx, `${b.name}(${b.size})`, xAxis - b1 * s + bw * s + 8, (yTop + yBot) / 2, 5.5, false);
   } else {
-    const xStartAxis = Math.min(b.start, b.end);
-    const xEndAxis = Math.max(b.start, b.end);
-    const a0 =
-      axesX.find((a) => Math.abs(a.pos - xStartAxis) < 0.5) ??
-      ({ id: "", name: "", pos: xStartAxis } as const);
-    const a1 =
-      axesX.find((a) => Math.abs(a.pos - xEndAxis) < 0.5) ??
-      ({ id: "", name: "", pos: xEndAxis } as const);
-    const xLo = beamOuterFaces(a0.pos, beamSectionOnAxis(project, "Y", a0)).lo;
-    const xHi = beamOuterFaces(a1.pos, beamSectionOnAxis(project, "Y", a1)).hi;
-    const yAxis = toY(b.axis);
-    // B1 từ mép dưới → tim: đỉnh da = axis + (bw - b1)
     const yTop = toY(b.axis + (bw - b1));
-    rect(ctx, toX(xLo), yTop, (xHi - xLo) * s, bw * s, 0.85);
-    textSimple(ctx, `${b.name}(${b.size})`, toX((xStartAxis + xEndAxis) / 2), yTop - 8, 5.5, false, "center");
+    rect(ctx, toX(lo), yTop, (hi - lo) * s, bw * s, 0.85);
+    textSimple(ctx, `${b.name}(${b.size})`, toX((lo + hi) / 2), yTop - 8, 5.5, false, "center");
   }
 }
 

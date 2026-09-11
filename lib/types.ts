@@ -68,11 +68,11 @@ export interface PlanBeam {
 /**
  * Đối tượng đang chọn trên mặt bằng:
  * - bay: ô sàn giữa hai cặp trục
- * - beamSeg: đoạn dầm giữa hai trục vuông góc
+ * - beam: một dầm (độc lập với trục)
  */
 export type PlanSelection =
   | { kind: "bay"; ix: number; iy: number }
-  | { kind: "beamSeg"; dir: RebarDir; axisIndex: number; segIndex: number };
+  | { kind: "beam"; beamId: string };
 
 export interface Opening {
   id: string;

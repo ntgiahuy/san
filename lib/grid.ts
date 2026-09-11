@@ -122,8 +122,8 @@ export function beamDims(info: SlabInfo): { B: number; H: number; B1: number } {
   return { B, H, B1 };
 }
 
-/** Đồng bộ beamSizeX/Y + counts từ trục / kích thước số. */
-export function syncBeamInfo(info: SlabInfo, axesXLen?: number, axesYLen?: number): SlabInfo {
+/** Đồng bộ kích thước dầm (B/H/B1/size). Không gắn beamCount với số trục. */
+export function syncBeamInfo(info: SlabInfo, _axesXLen?: number, _axesYLen?: number): SlabInfo {
   const { B, H, B1 } = beamDims(info);
   const size = formatBeamSize(B, H);
   return {
@@ -133,8 +133,8 @@ export function syncBeamInfo(info: SlabInfo, axesXLen?: number, axesYLen?: numbe
     beamB1: B1,
     beamSizeX: size,
     beamSizeY: size,
-    beamCountX: Math.max(2, Math.round(axesXLen ?? info.beamCountX ?? 2)),
-    beamCountY: Math.max(2, Math.round(axesYLen ?? info.beamCountY ?? 2)),
+    beamCountX: Math.max(0, Math.round(info.beamCountX ?? 0)),
+    beamCountY: Math.max(0, Math.round(info.beamCountY ?? 0)),
   };
 }
 
@@ -322,7 +322,7 @@ export function patchBeamOnAxis(
   const H = dims.beamH ?? parsed.h;
   const B1 = dims.beamB1 ?? current?.offset ?? Math.round(B / 2);
   const size = formatBeamSize(B, H);
-  const beams = (project.beams?.length ? project.beams : beamsFromAxes(project)).map((b) => {
+  const beams = (project.beams?.length ? project.beams : []).map((b) => {
     const match = b.axisId === axis.id || (b.direction === dir && Math.abs(b.axis - axis.pos) < 0.5);
     return match ? { ...b, size, offset: B1, axisId: axis.id, axis: axis.pos } : b;
   });
@@ -335,7 +335,7 @@ export function applyBeamDimsToAll(
   dims: { beamB: number; beamH: number; beamB1: number },
 ): SlabProject {
   const size = formatBeamSize(dims.beamB, dims.beamH);
-  const beams = (project.beams?.length ? project.beams : beamsFromAxes(project)).map((b) => ({
+  const beams = (project.beams?.length ? project.beams : []).map((b) => ({
     ...b,
     size,
     offset: dims.beamB1,
@@ -375,44 +375,124 @@ export function ensureAxes(project: SlabProject): SlabProject {
       ? sortAxes(project.axesY)
       : defaultAxesY(project.planHeight || 4500);
   const size = planSizeFromAxes(axesX, axesY);
-  const info = syncBeamInfo(project.info, axesX.length, axesY.length);
+  const info = syncBeamInfo({
+    ...project.info,
+    // Giữ nguyên số dầm; không đồng bộ theo số trục
+    beamCountX: project.info.beamCountX ?? project.beams?.filter((b) => b.direction === "Y").length ?? 0,
+    beamCountY: project.info.beamCountY ?? project.beams?.filter((b) => b.direction === "X").length ?? 0,
+  });
   return { ...project, info, axesX, axesY, ...size };
 }
 
+/** Cập nhật trục + kích thước mặt bằng — không đụng danh sách dầm. */
 export function applyAxesToProject(project: SlabProject): SlabProject {
   const withAxes = ensureAxes(project);
   const size = planSizeFromAxes(withAxes.axesX, withAxes.axesY);
-  const info = syncBeamInfo(withAxes.info, withAxes.axesX.length, withAxes.axesY.length);
-  const next = { ...withAxes, info, ...size };
-  return { ...next, beams: beamsFromAxes(next) };
+  const info = syncBeamInfo(withAxes.info);
+  return {
+    ...withAxes,
+    info,
+    ...size,
+    beams: withAxes.beams ?? [],
+  };
 }
 
-/** Đổi số lượng dầm theo X / Y rồi dựng lại trục + dầm. */
+/** Tạo dầm mới theo phương (Y = dầm đứng / theo trục X). */
+export function createBeam(
+  project: SlabProject,
+  direction: PlanBeam["direction"],
+  axisPos: number,
+  index: number,
+): PlanBeam {
+  const { B, H, B1 } = beamDims(project.info);
+  const prefix = project.info.beamNamePrefix || "D";
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+  const { planWidth: W, planHeight: Hplan } = planSizeFromAxes(axesX, axesY);
+  return {
+    id: uid("beam"),
+    name: `${prefix}${index}`,
+    size: formatBeamSize(B, H),
+    direction,
+    axis: axisPos,
+    start: 0,
+    end: direction === "Y" ? Hplan : W,
+    offset: B1,
+  };
+}
+
+/**
+ * Đổi số lượng dầm theo phương — không thêm/bớt trục.
+ * Phương X (UI): dầm đứng (direction Y). Phương Y: dầm ngang (direction X).
+ */
 export function applyBeamCounts(
   project: SlabProject,
   countX?: number,
   countY?: number,
 ): SlabProject {
   const base = ensureAxes(project);
-  const cx = Math.max(2, Math.round(countX ?? base.info.beamCountX ?? base.axesX.length));
-  const cy = Math.max(2, Math.round(countY ?? base.info.beamCountY ?? base.axesY.length));
-  const axesX =
-    cx === base.axesX.length
-      ? base.axesX
-      : setAxisCount(base.axesX, cx, base.planWidth || 6000, "X");
-  const axesY =
-    cy === base.axesY.length
-      ? base.axesY
-      : setAxisCount(base.axesY, cy, base.planHeight || 4500, "Y");
-  return applyAxesToProject({
+  const cx = Math.max(0, Math.round(countX ?? base.info.beamCountX ?? 0));
+  const cy = Math.max(0, Math.round(countY ?? base.info.beamCountY ?? 0));
+  const { planWidth: W, planHeight: Hplan } = planSizeFromAxes(base.axesX, base.axesY);
+  const { B, H, B1 } = beamDims(base.info);
+  const size = formatBeamSize(B, H);
+  const prefix = base.info.beamNamePrefix || "D";
+
+  const existingY = (base.beams ?? []).filter((b) => b.direction === "Y");
+  const existingX = (base.beams ?? []).filter((b) => b.direction === "X");
+
+  const nextY: PlanBeam[] = [];
+  for (let i = 0; i < cx; i++) {
+    if (existingY[i]) {
+      nextY.push(existingY[i]);
+    } else {
+      const axisPos = cx === 1 ? W / 2 : (W * i) / Math.max(cx - 1, 1);
+      nextY.push({
+        id: uid("beam"),
+        name: `${prefix}${nextY.length + existingX.length + 1}`,
+        size,
+        direction: "Y",
+        axis: Math.round(axisPos),
+        start: 0,
+        end: Hplan,
+        offset: B1,
+      });
+    }
+  }
+
+  const nextX: PlanBeam[] = [];
+  for (let i = 0; i < cy; i++) {
+    if (existingX[i]) {
+      nextX.push(existingX[i]);
+    } else {
+      const axisPos = cy === 1 ? Hplan / 2 : (Hplan * i) / Math.max(cy - 1, 1);
+      nextX.push({
+        id: uid("beam"),
+        name: `${prefix}${nextY.length + nextX.length + 1}`,
+        size,
+        direction: "X",
+        axis: Math.round(axisPos),
+        start: 0,
+        end: W,
+        offset: B1,
+      });
+    }
+  }
+
+  // Đánh lại tên nếu trùng / thiếu
+  const beams = [...nextY, ...nextX].map((b, i) => ({
+    ...b,
+    name: b.name?.trim() ? b.name : `${prefix}${i + 1}`,
+  }));
+
+  return {
     ...base,
-    axesX,
-    axesY,
-    info: { ...base.info, beamCountX: cx, beamCountY: cy },
-  });
+    info: syncBeamInfo({ ...base.info, beamCountX: cx, beamCountY: cy }),
+    beams,
+  };
 }
 
-/** Chèn thêm ô sàn theo phương X (thêm trục 1,2,3…). */
+/** Chèn thêm trục X — không thêm dầm. */
 export function insertSlabBayX(project: SlabProject, spanMm = 3000): SlabProject {
   const base = ensureAxes(project);
   const axesX = sortAxes(base.axesX);
@@ -428,7 +508,7 @@ export function insertSlabBayX(project: SlabProject, spanMm = 3000): SlabProject
   return applyAxesToProject({ ...base, axesX: nextX });
 }
 
-/** Chèn thêm ô sàn theo phương Y (thêm trục A,B,C…). */
+/** Chèn thêm trục Y — không thêm dầm. */
 export function insertSlabBayY(project: SlabProject, spanMm = 3000): SlabProject {
   const base = ensureAxes(project);
   const axesY = sortAxes(base.axesY);
@@ -442,4 +522,74 @@ export function insertSlabBayY(project: SlabProject, spanMm = 3000): SlabProject
     },
   ];
   return applyAxesToProject({ ...base, axesY: nextY });
+}
+
+/** Phạm vi vẽ dầm theo chiều dài: kéo đầu tới da dầm ngược phương nếu có. */
+export function beamDrawRange(
+  project: SlabProject,
+  beam: PlanBeam,
+): { lo: number; hi: number } {
+  let lo = Math.min(beam.start, beam.end);
+  let hi = Math.max(beam.start, beam.end);
+  const perp = (project.beams ?? []).filter((b) => b.direction !== beam.direction);
+  for (const p of perp) {
+    const pLo = Math.min(p.start, p.end);
+    const pHi = Math.max(p.start, p.end);
+    if (beam.axis < pLo - 1 || beam.axis > pHi + 1) continue;
+    const { b: bw } = parseSize(p.size);
+    const b1 = Number.isFinite(p.offset) ? (p.offset as number) : bw / 2;
+    const faces = beamOuterFaces(p.axis, { bw, b1 });
+    const half = Math.max(faces.hi - faces.lo, bw) / 2 + 80;
+    if (Math.abs(p.axis - lo) <= half) lo = Math.min(lo, faces.lo);
+    if (Math.abs(p.axis - hi) <= half) hi = Math.max(hi, faces.hi);
+  }
+  return { lo, hi };
+}
+
+/** Thêm một dầm theo phương (không thêm trục). */
+export function addBeam(
+  project: SlabProject,
+  direction: PlanBeam["direction"],
+): SlabProject {
+  const base = ensureAxes(project);
+  const beams = [...(base.beams ?? [])];
+  const { planWidth: W, planHeight: Hplan } = planSizeFromAxes(base.axesX, base.axesY);
+  const same = beams.filter((b) => b.direction === direction);
+  const axisPos =
+    direction === "Y"
+      ? Math.round(W / 2 + same.length * 300)
+      : Math.round(Hplan / 2 + same.length * 300);
+  const beam = createBeam(base, direction, axisPos, beams.length + 1);
+  beams.push(beam);
+  const beamCountX = beams.filter((b) => b.direction === "Y").length;
+  const beamCountY = beams.filter((b) => b.direction === "X").length;
+  return {
+    ...base,
+    beams,
+    info: syncBeamInfo({ ...base.info, beamCountX, beamCountY }),
+  };
+}
+
+/** Xóa dầm theo id (không xóa trục). */
+export function removeBeam(project: SlabProject, beamId: string): SlabProject {
+  const beams = (project.beams ?? []).filter((b) => b.id !== beamId);
+  return {
+    ...project,
+    beams,
+    info: syncBeamInfo({
+      ...project.info,
+      beamCountX: beams.filter((b) => b.direction === "Y").length,
+      beamCountY: beams.filter((b) => b.direction === "X").length,
+    }),
+  };
+}
+
+/** Cập nhật một dầm theo id. */
+export function patchBeam(
+  project: SlabProject,
+  beamId: string,
+  patch: Partial<PlanBeam>,
+): SlabProject {
+  const beams = (project.beams ?? []).map((b) => (b.id === beamId ? { ...b, ...patch } : b));
+  return { ...project, beams };
 }
