@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
-import { effectiveZones } from "@/lib/calc";
-import {
-  bayRebarExtent,
-  beamDrawRange,
-  sortAxes,
-} from "@/lib/grid";
-import { parseBeamSize } from "@/lib/calc";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { effectiveZones, parseBeamSize } from "@/lib/calc";
+import { bayRebarExtent, beamDrawRange, sortAxes } from "@/lib/grid";
 import type { PlanSelection, SlabProject } from "@/lib/types";
+
+type Anchor = { leftPct: number; topPct: number };
+
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
+}
 
 export function SlabPreview({
   project,
@@ -16,17 +17,22 @@ export function SlabPreview({
   selection = null,
   onSelect,
   interactive = false,
+  editPanel = null,
 }: {
   project: SlabProject;
   show3d?: boolean;
   selection?: PlanSelection | null;
   onSelect?: (sel: PlanSelection | null) => void;
-  /** Cho phép nhấp chọn ô sàn / đoạn dầm trên bản vẽ. */
+  /** Cho phép nhấp chọn ô sàn / đoạn dầm / số hiệu trục trên bản vẽ. */
   interactive?: boolean;
+  /** Bảng chỉnh sửa kích thước hiển thị tại vị trí chọn. */
+  editPanel?: ReactNode;
 }) {
   const zones = useMemo(() => effectiveZones(project), [project]);
   const axesX = useMemo(() => sortAxes(project.axesX ?? []), [project.axesX]);
   const axesY = useMemo(() => sortAxes(project.axesY ?? []), [project.axesY]);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState<Anchor | null>(null);
 
   const W = 640;
   const H = 420;
@@ -38,6 +44,64 @@ export function SlabPreview({
   const oy = pad + (H - pad * 2 - project.planHeight * s) / 2;
   const X = (mm: number) => ox + mm * s;
   const Y = (mm: number) => oy + (project.planHeight - mm) * s;
+
+  function anchorFromSvg(svgX: number, svgY: number): Anchor {
+    return {
+      leftPct: clamp((svgX / W) * 100, 8, 78),
+      topPct: clamp((svgY / H) * 100, 8, 72),
+    };
+  }
+
+  function anchorFromSelection(sel: PlanSelection): Anchor {
+    if (sel.kind === "bay") {
+      const x0 = axesX[sel.ix]?.pos ?? 0;
+      const x1 = axesX[sel.ix + 1]?.pos ?? x0;
+      const y0 = axesY[sel.iy]?.pos ?? 0;
+      const y1 = axesY[sel.iy + 1]?.pos ?? y0;
+      return anchorFromSvg(X((x0 + x1) / 2), Y((y0 + y1) / 2));
+    }
+    if (sel.kind === "beam") {
+      const beam = project.beams.find((b) => b.id === sel.beamId);
+      if (!beam) return { leftPct: 50, topPct: 40 };
+      const { lo, hi } = beamDrawRange(project, beam);
+      if (beam.direction === "Y") {
+        return anchorFromSvg(X(beam.axis) + 28, Y((lo + hi) / 2));
+      }
+      return anchorFromSvg(X((lo + hi) / 2), Y(beam.axis) - 28);
+    }
+    const axes = sel.dir === "X" ? axesX : axesY;
+    const ax = axes.find((a) => a.id === sel.axisId);
+    if (!ax) return { leftPct: 50, topPct: 40 };
+    if (sel.dir === "X") return anchorFromSvg(X(ax.pos), Y(0) + 36);
+    return anchorFromSvg(X(0) - 8, Y(ax.pos));
+  }
+
+  function pick(sel: PlanSelection | null, e?: MouseEvent) {
+    onSelect?.(sel);
+    if (!sel) {
+      setAnchor(null);
+      return;
+    }
+    if (e && wrapRef.current) {
+      const r = wrapRef.current.getBoundingClientRect();
+      setAnchor({
+        leftPct: clamp(((e.clientX - r.left) / Math.max(r.width, 1)) * 100, 4, 72),
+        topPct: clamp(((e.clientY - r.top) / Math.max(r.height, 1)) * 100, 4, 70),
+      });
+      return;
+    }
+    setAnchor(anchorFromSelection(sel));
+  }
+
+  useEffect(() => {
+    if (!selection) {
+      setAnchor(null);
+      return;
+    }
+    setAnchor((prev) => prev ?? anchorFromSelection(selection));
+    // Chỉ neo lại khi đổi đối tượng chọn (không theo mọi frame geometry).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection?.kind, selection && "beamId" in selection ? selection.beamId : null, selection && "axisId" in selection ? selection.axisId : null, selection && "ix" in selection ? selection.ix : null, selection && "iy" in selection ? selection.iy : null]);
 
   if (show3d) {
     return (
@@ -102,7 +166,7 @@ export function SlabPreview({
             onClick={(e) => {
               if (!interactive || !onSelect) return;
               e.stopPropagation();
-              onSelect({ kind: "bay", ix, iy });
+              pick({ kind: "bay", ix, iy }, e);
             }}
           />
           {active && (
@@ -124,7 +188,6 @@ export function SlabPreview({
   }
 
   const beamNodes: ReactNode[] = [];
-  // Vẽ từng dầm trong danh sách — độc lập với lưới trục
   for (const beam of project.beams ?? []) {
     const { b: bw } = parseBeamSize(beam.size);
     const b1 = Number.isFinite(beam.offset) ? (beam.offset as number) : bw / 2;
@@ -144,7 +207,7 @@ export function SlabPreview({
             onClick={(e) => {
               if (!interactive || !onSelect) return;
               e.stopPropagation();
-              onSelect({ kind: "beam", beamId: beam.id });
+              pick({ kind: "beam", beamId: beam.id }, e);
             }}
           />
           <rect
@@ -192,7 +255,7 @@ export function SlabPreview({
             onClick={(e) => {
               if (!interactive || !onSelect) return;
               e.stopPropagation();
-              onSelect({ kind: "beam", beamId: beam.id });
+              pick({ kind: "beam", beamId: beam.id }, e);
             }}
           />
           <rect
@@ -223,154 +286,207 @@ export function SlabPreview({
     }
   }
 
+  const statusText = !interactive
+    ? `${project.info.name} · ${project.beams.length} dầm · ${axesX.length - 1}×${axesY.length - 1} ô`
+    : !selection
+      ? "Nhấp ô sàn, dầm hoặc số hiệu trục trên bản vẽ để chỉnh kích thước tại chỗ."
+      : selection.kind === "bay"
+        ? `Ô sàn: ${axesX[selection.ix]?.name ?? "?"}–${axesX[selection.ix + 1]?.name ?? "?"} / ${axesY[selection.iy]?.name ?? "?"}–${axesY[selection.iy + 1]?.name ?? "?"}`
+        : selection.kind === "beam"
+          ? `Dầm đang chọn: ${project.beams.find((b) => b.id === selection.beamId)?.name ?? selection.beamId}`
+          : `Trục ${selection.dir}: ${
+              (selection.dir === "X" ? axesX : axesY).find((a) => a.id === selection.axisId)?.name ?? "?"
+            }`;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-zinc-950">
-      <div className="flex min-h-0 flex-1 items-center justify-center p-1 sm:p-2">
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
-          className="h-full w-full"
-          preserveAspectRatio="xMidYMid meet"
-          onClick={() => {
-            if (interactive && onSelect) onSelect(null);
-          }}
-        >
-          <rect
-            x={X(0)}
-            y={Y(project.planHeight)}
-            width={project.planWidth * s}
-            height={project.planHeight * s}
-            fill="#111113"
-            stroke="#79b8ff"
-            strokeWidth="1.5"
-            pointerEvents="none"
-          />
-          {bayNodes}
-          {axesX.map((ax) => (
-            <g key={`ax-${ax.id}`} pointerEvents="none">
-              <line
-                x1={X(ax.pos)}
-                y1={Y(0)}
-                x2={X(ax.pos)}
-                y2={Y(project.planHeight)}
-                stroke="#52525b"
-                strokeWidth="0.6"
-                strokeDasharray="3 3"
-              />
-              <circle cx={X(ax.pos)} cy={Y(0) + 16} r="9" fill="#0d1117" stroke="#79b8ff" strokeWidth="1.2" />
-              <text
-                x={X(ax.pos)}
-                y={Y(0) + 20}
-                textAnchor="middle"
-                fill="#79b8ff"
-                fontSize="11"
-                fontWeight="700"
-              >
-                {ax.name}
-              </text>
-            </g>
-          ))}
-          {axesY.map((ay) => (
-            <g key={`ay-${ay.id}`} pointerEvents="none">
-              <line
-                x1={X(0)}
-                y1={Y(ay.pos)}
-                x2={X(project.planWidth)}
-                y2={Y(ay.pos)}
-                stroke="#52525b"
-                strokeWidth="0.6"
-                strokeDasharray="3 3"
-              />
-              <circle cx={X(0) - 16} cy={Y(ay.pos)} r="9" fill="#0d1117" stroke="#fbbf24" strokeWidth="1.2" />
-              <text
-                x={X(0) - 16}
-                y={Y(ay.pos) + 4}
-                textAnchor="middle"
-                fill="#fbbf24"
-                fontSize="11"
-                fontWeight="700"
-              >
-                {ay.name}
-              </text>
-            </g>
-          ))}
-          {beamNodes}
-          {/* Mỗi ô sàn: 1 cây X + 1 cây Y qua tim; nằm trên dầm, thụt 50mm từ da dầm */}
-          {axesX.slice(0, -1).flatMap((_, ix) =>
-            axesY.slice(0, -1).map((_, iy) => {
-              const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
+      <div ref={wrapRef} className="relative min-h-0 flex-1">
+        <div className="flex h-full min-h-0 items-center justify-center p-1 sm:p-2">
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            className="h-full w-full"
+            preserveAspectRatio="xMidYMid meet"
+            onClick={() => {
+              if (interactive && onSelect) pick(null);
+            }}
+          >
+            <rect
+              x={X(0)}
+              y={Y(project.planHeight)}
+              width={project.planWidth * s}
+              height={project.planHeight * s}
+              fill="#111113"
+              stroke="#79b8ff"
+              strokeWidth="1.5"
+              pointerEvents="none"
+            />
+            {bayNodes}
+            {axesX.map((ax) => {
+              const active = selection?.kind === "axis" && selection.dir === "X" && selection.axisId === ax.id;
               return (
-                <g key={`rebar-bay-${ix}-${iy}`} pointerEvents="none">
+                <g key={`ax-${ax.id}`}>
                   <line
-                    x1={X(x0)}
-                    y1={Y(my)}
-                    x2={X(x1)}
-                    y2={Y(my)}
-                    stroke="#fbbf24"
-                    strokeWidth="1.4"
-                    opacity="0.95"
+                    x1={X(ax.pos)}
+                    y1={Y(0)}
+                    x2={X(ax.pos)}
+                    y2={Y(project.planHeight)}
+                    stroke={active ? "#79b8ff" : "#52525b"}
+                    strokeWidth={active ? 1.2 : 0.6}
+                    strokeDasharray="3 3"
+                    pointerEvents="none"
                   />
-                  <line
-                    x1={X(mx)}
-                    y1={Y(y0)}
-                    x2={X(mx)}
-                    y2={Y(y1)}
-                    stroke="#fbbf24"
-                    strokeWidth="1.4"
-                    opacity="0.95"
+                  <circle
+                    cx={X(ax.pos)}
+                    cy={Y(0) + 16}
+                    r="11"
+                    fill={active ? "#1e3a5f" : "#0d1117"}
+                    stroke="#79b8ff"
+                    strokeWidth={active ? 2 : 1.2}
+                    className={interactive ? "cursor-pointer" : undefined}
+                    pointerEvents={interactive ? "all" : "none"}
+                    onClick={(e) => {
+                      if (!interactive || !onSelect) return;
+                      e.stopPropagation();
+                      pick({ kind: "axis", dir: "X", axisId: ax.id }, e);
+                    }}
                   />
+                  <text
+                    x={X(ax.pos)}
+                    y={Y(0) + 20}
+                    textAnchor="middle"
+                    fill="#79b8ff"
+                    fontSize="11"
+                    fontWeight="700"
+                    pointerEvents="none"
+                  >
+                    {ax.name}
+                  </text>
                 </g>
               );
-            }),
-          )}
-          {zones.map((z) => {
-            const x1 = Math.min(z.x1, z.x2);
-            const x2 = Math.max(z.x1, z.x2);
-            const y1 = Math.min(z.y1, z.y2);
-            const y2 = Math.max(z.y1, z.y2);
-            const color =
-              z.layer === "top" ? "#fbbf24" : z.layer === "structural" ? "#a78bfa" : "#34d399";
-            return (
-              <g key={z.id} pointerEvents="none">
-                <rect
-                  x={X(x1)}
-                  y={Y(y2)}
-                  width={(x2 - x1) * s}
-                  height={(y2 - y1) * s}
-                  fill="none"
-                  stroke={color}
-                  strokeDasharray="4 3"
-                  strokeWidth="1"
-                  opacity="0.7"
-                />
-                <text
-                  x={X((x1 + x2) / 2)}
-                  y={Y((y1 + y2) / 2) - 8}
-                  textAnchor="middle"
-                  fill={color}
-                  fontSize="11"
-                  fontWeight="700"
-                >
-                  {z.mark}
-                </text>
-              </g>
-            );
-          })}
-          <text x={W / 2} y={18} textAnchor="middle" fill="#79b8ff" fontSize="13" fontWeight="700">
-            {project.info.name} · {Math.round(project.planWidth)}×{Math.round(project.planHeight)} ×{" "}
-            {project.info.thickness}mm
-          </text>
-        </svg>
+            })}
+            {axesY.map((ay) => {
+              const active = selection?.kind === "axis" && selection.dir === "Y" && selection.axisId === ay.id;
+              return (
+                <g key={`ay-${ay.id}`}>
+                  <line
+                    x1={X(0)}
+                    y1={Y(ay.pos)}
+                    x2={X(project.planWidth)}
+                    y2={Y(ay.pos)}
+                    stroke={active ? "#fbbf24" : "#52525b"}
+                    strokeWidth={active ? 1.2 : 0.6}
+                    strokeDasharray="3 3"
+                    pointerEvents="none"
+                  />
+                  <circle
+                    cx={X(0) - 16}
+                    cy={Y(ay.pos)}
+                    r="11"
+                    fill={active ? "#5b3b0a" : "#0d1117"}
+                    stroke="#fbbf24"
+                    strokeWidth={active ? 2 : 1.2}
+                    className={interactive ? "cursor-pointer" : undefined}
+                    pointerEvents={interactive ? "all" : "none"}
+                    onClick={(e) => {
+                      if (!interactive || !onSelect) return;
+                      e.stopPropagation();
+                      pick({ kind: "axis", dir: "Y", axisId: ay.id }, e);
+                    }}
+                  />
+                  <text
+                    x={X(0) - 16}
+                    y={Y(ay.pos) + 4}
+                    textAnchor="middle"
+                    fill="#fbbf24"
+                    fontSize="11"
+                    fontWeight="700"
+                    pointerEvents="none"
+                  >
+                    {ay.name}
+                  </text>
+                </g>
+              );
+            })}
+            {beamNodes}
+            {axesX.slice(0, -1).flatMap((_, ix) =>
+              axesY.slice(0, -1).map((_, iy) => {
+                const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
+                return (
+                  <g key={`rebar-bay-${ix}-${iy}`} pointerEvents="none">
+                    <line
+                      x1={X(x0)}
+                      y1={Y(my)}
+                      x2={X(x1)}
+                      y2={Y(my)}
+                      stroke="#fbbf24"
+                      strokeWidth="1.4"
+                      opacity="0.95"
+                    />
+                    <line
+                      x1={X(mx)}
+                      y1={Y(y0)}
+                      x2={X(mx)}
+                      y2={Y(y1)}
+                      stroke="#fbbf24"
+                      strokeWidth="1.4"
+                      opacity="0.95"
+                    />
+                  </g>
+                );
+              }),
+            )}
+            {zones.map((z) => {
+              const x1 = Math.min(z.x1, z.x2);
+              const x2 = Math.max(z.x1, z.x2);
+              const y1 = Math.min(z.y1, z.y2);
+              const y2 = Math.max(z.y1, z.y2);
+              const color =
+                z.layer === "top" ? "#fbbf24" : z.layer === "structural" ? "#a78bfa" : "#34d399";
+              return (
+                <g key={z.id} pointerEvents="none">
+                  <rect
+                    x={X(x1)}
+                    y={Y(y2)}
+                    width={(x2 - x1) * s}
+                    height={(y2 - y1) * s}
+                    fill="none"
+                    stroke={color}
+                    strokeDasharray="4 3"
+                    strokeWidth="1"
+                    opacity="0.7"
+                  />
+                  <text
+                    x={X((x1 + x2) / 2)}
+                    y={Y((y1 + y2) / 2) - 8}
+                    textAnchor="middle"
+                    fill={color}
+                    fontSize="11"
+                    fontWeight="700"
+                  >
+                    {z.mark}
+                  </text>
+                </g>
+              );
+            })}
+            <text x={W / 2} y={18} textAnchor="middle" fill="#79b8ff" fontSize="13" fontWeight="700">
+              {project.info.name} · {Math.round(project.planWidth)}×{Math.round(project.planHeight)} ×{" "}
+              {project.info.thickness}mm
+            </text>
+          </svg>
+        </div>
+
+        {interactive && selection && editPanel && anchor && (
+          <div
+            className="pointer-events-auto absolute z-30 w-[220px] -translate-x-1/2 rounded-lg border border-sky-500/50 bg-zinc-950/95 p-2.5 shadow-xl shadow-black/50 backdrop-blur-sm"
+            style={{ left: `${anchor.leftPct}%`, top: `${anchor.topPct}%` }}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {editPanel}
+          </div>
+        )}
       </div>
-      <div className="shrink-0 border-t border-zinc-800 px-3 py-1.5 text-[11px] text-zinc-500">
-        {interactive
-          ? selection
-            ? selection.kind === "bay"
-              ? `Ô sàn đang chọn: trục ${axesX[selection.ix]?.name ?? "?"}–${axesX[selection.ix + 1]?.name ?? "?"} / ${axesY[selection.iy]?.name ?? "?"}–${axesY[selection.iy + 1]?.name ?? "?"}`
-              : `Dầm đang chọn: ${project.beams.find((b) => b.id === selection.beamId)?.name ?? selection.beamId}`
-            : "Nhấp vào ô sàn hoặc dầm trên bản vẽ để chọn và sửa."
-          : `${project.info.name} · ${project.beams.length} dầm · ${axesX.length - 1}×${axesY.length - 1} ô`}
-      </div>
+      <div className="shrink-0 border-t border-zinc-800 px-3 py-1.5 text-[11px] text-zinc-500">{statusText}</div>
     </div>
   );
 }

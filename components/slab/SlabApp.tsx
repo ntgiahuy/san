@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Box,
   Check,
@@ -260,7 +260,179 @@ export function SlabApp() {
     if (a.kind === "beam" && b.kind === "beam") {
       return a.beamId === b.beamId;
     }
+    if (a.kind === "axis" && b.kind === "axis") {
+      return a.dir === b.dir && a.axisId === b.axisId;
+    }
     return false;
+  }
+
+  function selectedAxisInfo() {
+    if (planSelection?.kind !== "axis") return null;
+    const axes = sortAxes(planSelection.dir === "X" ? project.axesX : project.axesY);
+    const index = axes.findIndex((a) => a.id === planSelection.axisId);
+    if (index < 0) return null;
+    return {
+      dir: planSelection.dir,
+      id: axes[index].id,
+      name: axes[index].name,
+      index,
+      span: axisSpan(axes, index),
+      spanLabel: index === 0 ? "Vị trí gốc" : "Khoảng cách từ trục trước",
+    };
+  }
+
+  function patchSelectedAxisName(name: string) {
+    if (planSelection?.kind !== "axis") return;
+    if (planSelection.dir === "X") {
+      updateAxesX(renameAxis(project.axesX, planSelection.axisId, name));
+    } else {
+      updateAxesY(renameAxis(project.axesY, planSelection.axisId, name));
+    }
+  }
+
+  function patchSelectedAxisSpan(value: number) {
+    if (planSelection?.kind !== "axis") return;
+    const info = selectedAxisInfo();
+    if (!info) return;
+    const v = Math.max(0, Math.round(value) || 0);
+    if (info.dir === "X") {
+      if (info.index === 0) {
+        const sorted = sortAxes(project.axesX);
+        const delta = v - sorted[0].pos;
+        updateAxesX(sorted.map((a) => ({ ...a, pos: a.pos + delta })));
+      } else {
+        updateAxesX(setAxisSpan(project.axesX, info.index, v));
+      }
+    } else if (info.index === 0) {
+      const sorted = sortAxes(project.axesY);
+      const delta = v - sorted[0].pos;
+      updateAxesY(sorted.map((a) => ({ ...a, pos: a.pos + delta })));
+    } else {
+      updateAxesY(setAxisSpan(project.axesY, info.index, v));
+    }
+  }
+
+  function planEditPanel() {
+    if (!planSelection) return null;
+
+    const shell = (title: string, subtitle: string, accent: string, body: ReactNode) => (
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className={`text-[11px] font-semibold ${accent}`}>{title}</div>
+            <div className="truncate text-[10px] text-zinc-400">{subtitle}</div>
+          </div>
+          <button
+            type="button"
+            className="rounded px-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+            onClick={() => setPlanSelection(null)}
+            aria-label="Đóng"
+          >
+            ×
+          </button>
+        </div>
+        <div className="space-y-1.5">{body}</div>
+      </div>
+    );
+
+    const row = (label: string, input: ReactNode) => (
+      <label className="flex items-center justify-between gap-2 text-[11px] text-zinc-300">
+        <span className="shrink-0 text-zinc-400">{label}</span>
+        <div className="w-[7.5rem]">{input}</div>
+      </label>
+    );
+
+    if (planSelection.kind === "bay" && selectedBaySpans()) {
+      const spans = selectedBaySpans()!;
+      return shell(
+        "Ô sàn",
+        spans.name,
+        "text-sky-300",
+        <>
+          {row(
+            "Lx (mm)",
+            <Input
+              type="number"
+              value={Math.round(spans.lx)}
+              onChange={(e) => patchSelectedBaySpan("lx", Number(e.target.value))}
+            />,
+          )}
+          {row(
+            "Ly (mm)",
+            <Input
+              type="number"
+              value={Math.round(spans.ly)}
+              onChange={(e) => patchSelectedBaySpan("ly", Number(e.target.value))}
+            />,
+          )}
+        </>,
+      );
+    }
+    if (planSelection.kind === "beam" && selectedBeamInfo()) {
+      const info = selectedBeamInfo()!;
+      return shell(
+        "Dầm",
+        info.name,
+        "text-emerald-300",
+        <>
+          {row(
+            "L (mm)",
+            <Input
+              type="number"
+              value={Math.round(info.length)}
+              onChange={(e) => patchSelectedBeamLength(Number(e.target.value))}
+            />,
+          )}
+          {row(
+            "B (mm)",
+            <Input
+              type="number"
+              value={info.B}
+              onChange={(e) => patchSelectedBeamDims({ beamB: Number(e.target.value) || 0 })}
+            />,
+          )}
+          {row(
+            "H (mm)",
+            <Input
+              type="number"
+              value={info.H}
+              onChange={(e) => patchSelectedBeamDims({ beamH: Number(e.target.value) || 0 })}
+            />,
+          )}
+          {row(
+            "B1 (mm)",
+            <Input
+              type="number"
+              value={info.B1}
+              onChange={(e) => patchSelectedBeamDims({ beamB1: Number(e.target.value) || 0 })}
+            />,
+          )}
+        </>,
+      );
+    }
+    if (planSelection.kind === "axis" && selectedAxisInfo()) {
+      const info = selectedAxisInfo()!;
+      return shell(
+        `Trục ${info.dir}`,
+        info.spanLabel,
+        "text-amber-300",
+        <>
+          {row(
+            "Số hiệu",
+            <Input value={info.name} onChange={(e) => patchSelectedAxisName(e.target.value)} />,
+          )}
+          {row(
+            info.index === 0 ? "Vị trí (mm)" : "Nhịp (mm)",
+            <Input
+              type="number"
+              value={Math.round(info.span)}
+              onChange={(e) => patchSelectedAxisSpan(Number(e.target.value))}
+            />,
+          )}
+        </>,
+      );
+    }
+    return null;
   }
 
   /** Tiếp theo: dịch chọn dầm/ô sàn từ trái sang phải (lặp lại). */
@@ -290,6 +462,10 @@ export function SlabApp() {
   function applySelectionToAllSpans() {
     if (!planSelection) {
       setStatus("Hãy chọn một đoạn dầm hoặc ô sàn trước.");
+      return;
+    }
+    if (planSelection.kind === "axis") {
+      setStatus("Chọn ô sàn hoặc dầm để áp dụng cho các nhịp.");
       return;
     }
     if (planSelection.kind === "bay") {
@@ -1571,6 +1747,7 @@ export function SlabApp() {
               interactive={tab === "plan" || tab === "axes" || tab === "beams" || tab === "draw"}
               selection={planSelection}
               onSelect={setPlanSelection}
+              editPanel={planEditPanel()}
             />
           </div>
         </div>

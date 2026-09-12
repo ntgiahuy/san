@@ -69,10 +69,12 @@ export interface PlanBeam {
  * Đối tượng đang chọn trên mặt bằng:
  * - bay: ô sàn giữa hai cặp trục
  * - beam: một dầm (độc lập với trục)
+ * - axis: số hiệu / nhịp trục (X hoặc Y)
  */
 export type PlanSelection =
   | { kind: "bay"; ix: number; iy: number }
-  | { kind: "beam"; beamId: string };
+  | { kind: "beam"; beamId: string }
+  | { kind: "axis"; dir: "X" | "Y"; axisId: string };
 
 export interface Opening {
   id: string;
