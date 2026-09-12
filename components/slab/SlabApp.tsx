@@ -36,6 +36,7 @@ import {
   removeAxis,
   removeBeam,
   renameAxis,
+  setAxisCount,
   setAxisSpan,
   setPlanSize,
   sortAxes,
@@ -142,6 +143,26 @@ export function SlabApp() {
         ? applyBeamCounts(project, n, project.info.beamCountY)
         : applyBeamCounts(project, project.info.beamCountX, n),
     );
+  }
+
+  /** Đổi số trục: giữ kích thước sàn, chia đều vị trí (không đổi dầm). */
+  function patchAxisCount(dir: "X" | "Y", value: number) {
+    const n = Math.max(2, Math.floor(value) || 2);
+    if (dir === "X") {
+      persist(
+        applyAxesToProject({
+          ...project,
+          axesX: setAxisCount(project.axesX ?? [], n, project.planWidth, "X"),
+        }),
+      );
+    } else {
+      persist(
+        applyAxesToProject({
+          ...project,
+          axesY: setAxisCount(project.axesY ?? [], n, project.planHeight, "Y"),
+        }),
+      );
+    }
   }
 
   function selectedBaySpans() {
@@ -623,6 +644,38 @@ export function SlabApp() {
                       type="number"
                       value={project.info.lowSlabDrop}
                       onChange={(e) => patchInfo({ lowSlabDrop: Number(e.target.value) || 0 })}
+                    />
+                  </Field>
+                  <Field label="Số lượng trục X">
+                    <Input
+                      type="number"
+                      min={2}
+                      value={project.axesX?.length ?? 2}
+                      onChange={(e) => patchAxisCount("X", Number(e.target.value))}
+                    />
+                  </Field>
+                  <Field label="Số lượng trục Y">
+                    <Input
+                      type="number"
+                      min={2}
+                      value={project.axesY?.length ?? 2}
+                      onChange={(e) => patchAxisCount("Y", Number(e.target.value))}
+                    />
+                  </Field>
+                  <Field label="Số lượng dầm X">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={project.info.beamCountX ?? project.beams.filter((b) => b.direction === "Y").length}
+                      onChange={(e) => patchBeamCount("X", Number(e.target.value))}
+                    />
+                  </Field>
+                  <Field label="Số lượng dầm Y">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={project.info.beamCountY ?? project.beams.filter((b) => b.direction === "X").length}
+                      onChange={(e) => patchBeamCount("Y", Number(e.target.value))}
                     />
                   </Field>
                 </div>
