@@ -438,21 +438,29 @@ export function applyBeamCounts(
   const size = formatBeamSize(B, H);
   const prefix = base.info.beamNamePrefix || "D";
 
-  const existingY = (base.beams ?? []).filter((b) => b.direction === "Y");
-  const existingX = (base.beams ?? []).filter((b) => b.direction === "X");
+  const existingY = (base.beams ?? [])
+    .filter((b) => b.direction === "Y")
+    .sort((a, b) => a.axis - b.axis);
+  const existingX = (base.beams ?? [])
+    .filter((b) => b.direction === "X")
+    .sort((a, b) => a.axis - b.axis);
+
+  const place = (n: number, i: number, total: number) =>
+    n <= 1 ? Math.round(total / 2) : Math.round((total * i) / (n - 1));
 
   const nextY: PlanBeam[] = [];
   for (let i = 0; i < cx; i++) {
-    if (existingY[i]) {
-      nextY.push(existingY[i]);
+    const axisPos = place(cx, i, W);
+    const prev = existingY[i];
+    if (prev) {
+      nextY.push({ ...prev, axis: axisPos, start: 0, end: Hplan });
     } else {
-      const axisPos = cx === 1 ? W / 2 : (W * i) / Math.max(cx - 1, 1);
       nextY.push({
         id: uid("beam"),
         name: `${prefix}${nextY.length + existingX.length + 1}`,
         size,
         direction: "Y",
-        axis: Math.round(axisPos),
+        axis: axisPos,
         start: 0,
         end: Hplan,
         offset: B1,
@@ -462,16 +470,17 @@ export function applyBeamCounts(
 
   const nextX: PlanBeam[] = [];
   for (let i = 0; i < cy; i++) {
-    if (existingX[i]) {
-      nextX.push(existingX[i]);
+    const axisPos = place(cy, i, Hplan);
+    const prev = existingX[i];
+    if (prev) {
+      nextX.push({ ...prev, axis: axisPos, start: 0, end: W });
     } else {
-      const axisPos = cy === 1 ? Hplan / 2 : (Hplan * i) / Math.max(cy - 1, 1);
       nextX.push({
         id: uid("beam"),
         name: `${prefix}${nextY.length + nextX.length + 1}`,
         size,
         direction: "X",
-        axis: Math.round(axisPos),
+        axis: axisPos,
         start: 0,
         end: W,
         offset: B1,
