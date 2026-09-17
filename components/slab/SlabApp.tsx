@@ -55,7 +55,6 @@ import {
   syncBeamInfo,
   syncBeamsToAxes,
   insertBeamInBay,
-  patchBeamAllSegShifts,
   patchBeamSelectedSegShiftsContinuous,
 } from "@/lib/grid";
 import { withBasePath } from "@/lib/base-path";
