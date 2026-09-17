@@ -1403,7 +1403,7 @@ export function SlabApp() {
 
           {tab === "beams" && (
             <div className="flex flex-col gap-3">
-              <Panel title="Số liệu dầm" className="min-w-0 w-full">
+              <Panel title="Tạo dầm mới" className="min-w-0 w-full">
                 <div className="flex flex-col gap-2.5">
                   <div className="flex flex-wrap items-end gap-1.5">
                     <Field label="Tên dầm">
