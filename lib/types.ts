@@ -55,6 +55,11 @@ export interface PlanBeam {
   axis: number;
   /** Id trục gắn với dầm (để giữ kích thước khi dựng lại lưới). */
   axisId?: string;
+  /**
+   * Dầm chèn giữa ô — không gắn trục lưới.
+   * `syncBeamsToAxes` giữ nguyên `axis` / `offset`, không gán axisId.
+   */
+  free?: boolean;
   /** Đầu / cuối theo hướng dầm. */
   start: number;
   end: number;

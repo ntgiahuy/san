@@ -208,9 +208,10 @@ export function SlabApp() {
     const shift = getBeamSegShift(beam, seg.index);
     return {
       id: beam.id,
-      name: `${beam.name} · ${seg.a0.name}–${seg.a1.name} · ${beam.direction === "Y" ? "đứng" : "ngang"}`,
+      name: `${beam.name} · ${seg.a0.name}–${seg.a1.name} · ${beam.direction === "Y" ? "đứng" : "ngang"}${beam.free ? " · giữa ô" : ""}`,
       length: seg.span,
       axis: beam.axis,
+      free: Boolean(beam.free),
       start: seg.lo,
       end: seg.hi,
       segIndex: seg.index,
@@ -247,6 +248,15 @@ export function SlabApp() {
     } else {
       persist(applyAxesToProject({ ...project, axesX: setAxisSpan(project.axesX, info.spanAxisIndex, v) }));
     }
+  }
+
+  /** Đổi vị trí tim dầm chèn giữa ô (không gắn trục). */
+  function patchSelectedFreeBeamAxis(value: number) {
+    if (planSelection?.kind !== "beam") return;
+    const beam = project.beams.find((b) => b.id === planSelection.beamId);
+    if (!beam?.free) return;
+    const v = Math.max(0, Math.round(value) || 0);
+    persist(patchBeam(project, beam.id, { axis: v, free: true, axisId: undefined }));
   }
 
 
@@ -495,7 +505,7 @@ export function SlabApp() {
       }
     }
     setStatus(
-      `Đã chèn dầm «${type.name}» vào ô — chỉnh khoảng cách trục (L) ở panel dầm đang chọn nếu cần. Vẫn đang chèn: click ô khác hoặc bấm Chèn dầm để hủy.`,
+      `Đã chèn dầm «${type.name}» vào giữa ô (không thêm trục) — chỉnh L đoạn hoặc khoảng cách trục trước lần chèn sau. Vẫn đang chèn: click ô khác hoặc bấm Chèn dầm để hủy.`,
     );
   }
 
@@ -1634,8 +1644,8 @@ export function SlabApp() {
                             : "Chèn dầm"}
                         {" · "}
                         {insertBeamMode
-                          ? "Đang chèn — click ô sàn trên bản vẽ. Tick Phương X/Y; chỉnh khoảng cách trục rồi chèn hoặc sửa L sau."
-                          : "Chọn đoạn trên bản vẽ (Ctrl/Shift) rồi Gán tên — hoặc Chèn dầm vào giữa ô."}
+                          ? "Đang chèn — click ô sàn (không thêm trục). Tick Phương X/Y; khoảng cách trục trước khi chèn hoặc sửa Tim sau."
+                          : "Chọn đoạn trên bản vẽ (Ctrl/Shift) rồi Gán tên — hoặc Chèn dầm vào giữa ô (không thêm trục)."}
                       </p>
                     </div>
                   )}
@@ -1695,6 +1705,22 @@ export function SlabApp() {
                           onChange={(e) => patchSelectedBeamLength(Number(e.target.value))}
                         />
                       </Field>
+                      {selectedBeamInfo()!.free && (
+                        <Field
+                          label={
+                            selectedBeamInfo()!.direction === "Y"
+                              ? "Tim X (giữa ô)"
+                              : "Tim Y (giữa ô)"
+                          }
+                          unit="mm"
+                        >
+                          <Input
+                            type="number"
+                            value={Math.round(selectedBeamInfo()!.axis)}
+                            onChange={(e) => patchSelectedFreeBeamAxis(Number(e.target.value))}
+                          />
+                        </Field>
+                      )}
                       <Field label="Chiều cao H" unit="mm">
                         <Input
                           type="number"
