@@ -351,7 +351,7 @@ export function SlabApp() {
   useEffect(() => {
     if (tab !== "draw" || planSelection?.kind !== "bay") return;
     const id = window.setTimeout(() => {
-      selectedBayPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      selectedBayPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }, 50);
     return () => window.clearTimeout(id);
   }, [tab, planSelection]);
@@ -1276,52 +1276,8 @@ export function SlabApp() {
                     Thống kê thép sàn
                   </Button>
                 </div>
-
-                {planSelection?.kind === "bay" && selectedBaySpans() && (
-                  <div
-                    ref={selectedBayPanelRef}
-                    className="mt-3 rounded border border-sky-700/60 bg-sky-950/30 p-2"
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <div className="text-xs font-semibold text-sky-300">Ô sàn đang chọn trên bản vẽ</div>
-                      <Button size="sm" variant="secondary" onClick={() => setPlanSelection(null)}>
-                        Bỏ chọn
-                      </Button>
-                    </div>
-                    <p className="mb-2 text-[11px] text-zinc-400">{selectedBaySpans()!.name}</p>
-                    <div className="flex flex-col gap-2.5">
-                      <Field label="Khoảng cách Lx" unit="mm">
-                        <Input
-                          type="number"
-                          value={Math.round(selectedBaySpans()!.lx)}
-                          onChange={(e) => patchSelectedBaySpan("lx", Number(e.target.value))}
-                        />
-                      </Field>
-                      <Field label="Khoảng cách Ly" unit="mm">
-                        <Input
-                          type="number"
-                          value={Math.round(selectedBaySpans()!.ly)}
-                          onChange={(e) => patchSelectedBaySpan("ly", Number(e.target.value))}
-                        />
-                      </Field>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="success"
-                        size="sm"
-                        title="Chọn ô sàn tiếp theo (trái → phải)"
-                        onClick={selectNextPlanItem}
-                      >
-                        <ChevronRight /> Tiếp theo
-                      </Button>
-                      <Button variant="success" size="sm" onClick={applySelectionToAllSpans}>
-                        <Check /> Áp dụng cho các nhịp
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </Panel>
-              <Panel title="Danh sách vùng thép" className="w-56">
+              <Panel title="Danh sách vùng thép" className="min-w-0 w-full">
                 <ul className="max-h-48 space-y-1 overflow-auto text-xs">
                   {(project.layoutPreset === "manual" ? project.zones : zones).map((z) => (
                     <li key={z.id}>
@@ -1342,6 +1298,50 @@ export function SlabApp() {
                   ))}
                 </ul>
               </Panel>
+
+              {planSelection?.kind === "bay" && selectedBaySpans() && (
+                <div
+                  ref={selectedBayPanelRef}
+                  className="rounded border border-sky-700/60 bg-sky-950/30 p-2"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-sky-300">Ô sàn đang chọn trên bản vẽ</div>
+                    <Button size="sm" variant="secondary" onClick={() => setPlanSelection(null)}>
+                      Bỏ chọn
+                    </Button>
+                  </div>
+                  <p className="mb-2 text-[11px] text-zinc-400">{selectedBaySpans()!.name}</p>
+                  <div className="flex flex-col gap-2.5">
+                    <Field label="Khoảng cách Lx" unit="mm">
+                      <Input
+                        type="number"
+                        value={Math.round(selectedBaySpans()!.lx)}
+                        onChange={(e) => patchSelectedBaySpan("lx", Number(e.target.value))}
+                      />
+                    </Field>
+                    <Field label="Khoảng cách Ly" unit="mm">
+                      <Input
+                        type="number"
+                        value={Math.round(selectedBaySpans()!.ly)}
+                        onChange={(e) => patchSelectedBaySpan("ly", Number(e.target.value))}
+                      />
+                    </Field>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="success"
+                      size="sm"
+                      title="Chọn ô sàn tiếp theo (trái → phải)"
+                      onClick={selectNextPlanItem}
+                    >
+                      <ChevronRight /> Tiếp theo
+                    </Button>
+                    <Button variant="success" size="sm" onClick={applySelectionToAllSpans}>
+                      <Check /> Áp dụng cho các nhịp
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
