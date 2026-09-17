@@ -14,6 +14,7 @@ import {
   beamOuterFaces,
   beamSectionOnAxis,
   sortAxes,
+  SLAB_REBAR_HOOK_MM,
 } from "../grid";
 import type { PlanBeam, RebarZone, SlabProject } from "../types";
 
@@ -21,6 +22,7 @@ const PAGE_W = 1684;
 const PAGE_H = 1191;
 const BLACK = rgb(0, 0, 0);
 const GRAY = rgb(0.45, 0.45, 0.45);
+const REBAR_RED = rgb(0.86, 0.15, 0.15);
 
 type Ctx = {
   page: PDFPage;
@@ -34,12 +36,20 @@ function ty(yTop: number) {
   return PAGE_H - yTop;
 }
 
-function line(ctx: Ctx, x1: number, y1: number, x2: number, y2: number, w = 0.7) {
+function line(
+  ctx: Ctx,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  w = 0.7,
+  color = BLACK,
+) {
   ctx.page.drawLine({
     start: { x: x1, y: ty(y1) },
     end: { x: x2, y: ty(y2) },
     thickness: w,
-    color: BLACK,
+    color,
   });
 }
 
@@ -195,14 +205,19 @@ function drawPlan(
     textSimple(ctx, o.name || "Ô", x + (o.w * s) / 2, y + (o.h * s) / 2, 6, false, "center");
   }
 
-  // Mỗi ô sàn: 1 cây phương X + 1 cây phương Y qua tim; thụt 50mm từ da dầm
+  // Mỗi ô sàn: 1 cây X + 1 cây Y qua tim; đỏ, móc 50mm hai đầu; thụt 50mm từ da dầm
   const axesX = sortAxes(project.axesX ?? []);
   const axesY = sortAxes(project.axesY ?? []);
+  const hook = SLAB_REBAR_HOOK_MM;
   for (let ix = 0; ix < axesX.length - 1; ix++) {
     for (let iy = 0; iy < axesY.length - 1; iy++) {
       const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
-      line(ctx, toX(x0), toY(my), toX(x1), toY(my), 0.55);
-      line(ctx, toX(mx), toY(y0), toX(mx), toY(y1), 0.55);
+      line(ctx, toX(x0), toY(my), toX(x1), toY(my), 0.7, REBAR_RED);
+      line(ctx, toX(x0), toY(my), toX(x0), toY(my - hook), 0.7, REBAR_RED);
+      line(ctx, toX(x1), toY(my), toX(x1), toY(my - hook), 0.7, REBAR_RED);
+      line(ctx, toX(mx), toY(y0), toX(mx), toY(y1), 0.7, REBAR_RED);
+      line(ctx, toX(mx), toY(y0), toX(mx + hook), toY(y0), 0.7, REBAR_RED);
+      line(ctx, toX(mx), toY(y1), toX(mx + hook), toY(y1), 0.7, REBAR_RED);
     }
   }
 
@@ -220,15 +235,6 @@ function drawPlan(
       borderWidth: 0.45,
       borderDashArray: [3, 2],
     });
-    textSimple(
-      ctx,
-      `${z.mark} Ø${z.dia}a${z.spacing}`,
-      (zx1 + zx2) / 2,
-      (zy1 + zy2) / 2,
-      6.5,
-      true,
-      "center",
-    );
   }
 
   dimH(ctx, x0, x0 + pw, y0 + ph + 14, `${Math.round(project.planWidth)}`);

@@ -108,6 +108,42 @@ export function bayRebarExtent(
   };
 }
 
+/**
+ * Phạm vi ô sàn theo mép dầm (da trong): giữa hai da dầm đứng / ngang,
+ * không lấy từ tim trục.
+ */
+export function baySlabExtent(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+  ix: number,
+  iy: number,
+): { x0: number; x1: number; y0: number; y1: number; mx: number; my: number } {
+  const ax0 = axesX[ix];
+  const ax1 = axesX[ix + 1];
+  const ay0 = axesY[iy];
+  const ay1 = axesY[iy + 1];
+  const left = beamOuterFaces(ax0.pos, beamSectionOnAxis(project, "Y", ax0));
+  const right = beamOuterFaces(ax1.pos, beamSectionOnAxis(project, "Y", ax1));
+  const bottom = beamOuterFaces(ay0.pos, beamSectionOnAxis(project, "X", ay0));
+  const top = beamOuterFaces(ay1.pos, beamSectionOnAxis(project, "X", ay1));
+  const x0 = left.hi;
+  const x1 = Math.max(x0, right.lo);
+  const y0 = bottom.hi;
+  const y1 = Math.max(y0, top.lo);
+  return {
+    x0,
+    x1,
+    y0,
+    y1,
+    mx: (x0 + x1) / 2,
+    my: (y0 + y1) / 2,
+  };
+}
+
+/** Chiều dài móc thép sàn trên mặt bằng (mm). */
+export const SLAB_REBAR_HOOK_MM = 50;
+
 /** Đọc B / H / B1 từ info (kèm fallback chuỗi beamSize cũ). */
 export function beamDims(info: SlabInfo): { B: number; H: number; B1: number } {
   const fromStr = (size?: string) => {

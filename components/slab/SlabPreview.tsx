@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { effectiveZones, parseBeamSize } from "@/lib/calc";
-import { bayRebarExtent, beamDrawRange, sortAxes } from "@/lib/grid";
+import { bayRebarExtent, baySlabExtent, beamDrawRange, sortAxes, SLAB_REBAR_HOOK_MM } from "@/lib/grid";
 import type { PlanSelection, SlabProject } from "@/lib/types";
 
 type Anchor = { leftPct: number; topPct: number };
@@ -54,10 +54,7 @@ export function SlabPreview({
 
   function anchorFromSelection(sel: PlanSelection): Anchor {
     if (sel.kind === "bay") {
-      const x0 = axesX[sel.ix]?.pos ?? 0;
-      const x1 = axesX[sel.ix + 1]?.pos ?? x0;
-      const y0 = axesY[sel.iy]?.pos ?? 0;
-      const y1 = axesY[sel.iy + 1]?.pos ?? y0;
+      const { x0, x1, y0, y1 } = baySlabExtent(project, axesX, axesY, sel.ix, sel.iy);
       return anchorFromSvg(X((x0 + x1) / 2), Y((y0 + y1) / 2));
     }
     if (sel.kind === "beam") {
@@ -146,10 +143,7 @@ export function SlabPreview({
   const bayNodes: ReactNode[] = [];
   for (let ix = 0; ix < axesX.length - 1; ix++) {
     for (let iy = 0; iy < axesY.length - 1; iy++) {
-      const x0 = axesX[ix].pos;
-      const x1 = axesX[ix + 1].pos;
-      const y0 = axesY[iy].pos;
-      const y1 = axesY[iy + 1].pos;
+      const { x0, x1, y0, y1 } = baySlabExtent(project, axesX, axesY, ix, iy);
       const active = selection?.kind === "bay" && selection.ix === ix && selection.iy === iy;
       bayNodes.push(
         <g key={`bay-${ix}-${iy}`}>
@@ -411,6 +405,8 @@ export function SlabPreview({
             {axesX.slice(0, -1).flatMap((_, ix) =>
               axesY.slice(0, -1).map((_, iy) => {
                 const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
+                const hook = SLAB_REBAR_HOOK_MM;
+                const stroke = "#ef4444";
                 return (
                   <g key={`rebar-bay-${ix}-${iy}`} pointerEvents="none">
                     <line
@@ -418,8 +414,26 @@ export function SlabPreview({
                       y1={Y(my)}
                       x2={X(x1)}
                       y2={Y(my)}
-                      stroke="#fbbf24"
-                      strokeWidth="1.4"
+                      stroke={stroke}
+                      strokeWidth="1.6"
+                      opacity="0.95"
+                    />
+                    <line
+                      x1={X(x0)}
+                      y1={Y(my)}
+                      x2={X(x0)}
+                      y2={Y(my - hook)}
+                      stroke={stroke}
+                      strokeWidth="1.6"
+                      opacity="0.95"
+                    />
+                    <line
+                      x1={X(x1)}
+                      y1={Y(my)}
+                      x2={X(x1)}
+                      y2={Y(my - hook)}
+                      stroke={stroke}
+                      strokeWidth="1.6"
                       opacity="0.95"
                     />
                     <line
@@ -427,47 +441,32 @@ export function SlabPreview({
                       y1={Y(y0)}
                       x2={X(mx)}
                       y2={Y(y1)}
-                      stroke="#fbbf24"
-                      strokeWidth="1.4"
+                      stroke={stroke}
+                      strokeWidth="1.6"
+                      opacity="0.95"
+                    />
+                    <line
+                      x1={X(mx)}
+                      y1={Y(y0)}
+                      x2={X(mx + hook)}
+                      y2={Y(y0)}
+                      stroke={stroke}
+                      strokeWidth="1.6"
+                      opacity="0.95"
+                    />
+                    <line
+                      x1={X(mx)}
+                      y1={Y(y1)}
+                      x2={X(mx + hook)}
+                      y2={Y(y1)}
+                      stroke={stroke}
+                      strokeWidth="1.6"
                       opacity="0.95"
                     />
                   </g>
                 );
               }),
             )}
-            {zones.map((z) => {
-              const x1 = Math.min(z.x1, z.x2);
-              const x2 = Math.max(z.x1, z.x2);
-              const y1 = Math.min(z.y1, z.y2);
-              const y2 = Math.max(z.y1, z.y2);
-              const color =
-                z.layer === "top" ? "#fbbf24" : z.layer === "structural" ? "#a78bfa" : "#34d399";
-              return (
-                <g key={z.id} pointerEvents="none">
-                  <rect
-                    x={X(x1)}
-                    y={Y(y2)}
-                    width={(x2 - x1) * s}
-                    height={(y2 - y1) * s}
-                    fill="none"
-                    stroke={color}
-                    strokeDasharray="4 3"
-                    strokeWidth="1"
-                    opacity="0.7"
-                  />
-                  <text
-                    x={X((x1 + x2) / 2)}
-                    y={Y((y1 + y2) / 2) - 8}
-                    textAnchor="middle"
-                    fill={color}
-                    fontSize="11"
-                    fontWeight="700"
-                  >
-                    {z.mark}
-                  </text>
-                </g>
-              );
-            })}
             <text x={W / 2} y={18} textAnchor="middle" fill="#79b8ff" fontSize="13" fontWeight="700">
               {project.info.name} · {Math.round(project.planWidth)}×{Math.round(project.planHeight)} ×{" "}
               {project.info.thickness}mm
