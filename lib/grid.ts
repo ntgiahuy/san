@@ -271,12 +271,24 @@ export function beamsFromAxes(project: SlabProject): PlanBeam[] {
 
   const beams: PlanBeam[] = [];
   let n = 1;
+  const usedNames = new Set<string>();
+  const nextName = (preferred?: string) => {
+    if (preferred && preferred.trim() && !usedNames.has(preferred)) {
+      usedNames.add(preferred);
+      return preferred;
+    }
+    let name = `${prefix}${n++}`;
+    while (usedNames.has(name)) name = `${prefix}${n++}`;
+    usedNames.add(name);
+    return name;
+  };
+
   for (const ax of axesX) {
     const old = findPrev("Y", ax.id, ax.pos);
     const dims = old ? parseSize(old.size) : { b: B, h: H };
     beams.push({
       id: old?.id ?? uid("beam"),
-      name: old?.name ?? `${prefix}${n++}`,
+      name: nextName(old?.name),
       size: old ? formatBeamSize(dims.b, dims.h) : defaultSize,
       direction: "Y",
       axis: ax.pos,
@@ -291,7 +303,7 @@ export function beamsFromAxes(project: SlabProject): PlanBeam[] {
     const dims = old ? parseSize(old.size) : { b: B, h: H };
     beams.push({
       id: old?.id ?? uid("beam"),
-      name: old?.name ?? `${prefix}${n++}`,
+      name: nextName(old?.name),
       size: old ? formatBeamSize(dims.b, dims.h) : defaultSize,
       direction: "X",
       axis: ay.pos,
@@ -394,6 +406,90 @@ export function applyAxesToProject(project: SlabProject): SlabProject {
     info,
     ...size,
     beams: withAxes.beams ?? [],
+  };
+}
+
+/**
+ * Đổi số lượng trục theo phương và đồng bộ dầm trên tim trục đó.
+ * - Trục X → dầm đứng (direction Y) tại từng tim trục X
+ * - Trục Y → dầm ngang (direction X) tại từng tim trục Y
+ * Dầm phương còn lại giữ nguyên; tái dùng tên/kích thước dầm cũ theo thứ tự.
+ */
+export function applyAxisCount(
+  project: SlabProject,
+  dir: "X" | "Y",
+  count: number,
+): SlabProject {
+  const n = Math.max(2, Math.floor(count) || 2);
+  const nextAxes =
+    dir === "X"
+      ? {
+          axesX: setAxisCount(project.axesX ?? [], n, project.planWidth || 6000, "X"),
+          axesY: project.axesY,
+        }
+      : {
+          axesX: project.axesX,
+          axesY: setAxisCount(project.axesY ?? [], n, project.planHeight || 4500, "Y"),
+        };
+  const withAxes = applyAxesToProject({ ...project, ...nextAxes });
+  const axesX = sortAxes(withAxes.axesX ?? []);
+  const axesY = sortAxes(withAxes.axesY ?? []);
+  const { planWidth: W, planHeight: Hplan } = planSizeFromAxes(axesX, axesY);
+  const { B, H, B1 } = beamDims(withAxes.info);
+  const defaultSize = formatBeamSize(B, H);
+  const prefix = withAxes.info.beamNamePrefix || "D";
+
+  const beamDir: PlanBeam["direction"] = dir === "X" ? "Y" : "X";
+  const axes = dir === "X" ? axesX : axesY;
+  const existing = (withAxes.beams ?? [])
+    .filter((b) => b.direction === beamDir)
+    .sort((a, b) => a.axis - b.axis);
+  const keptOther = (withAxes.beams ?? [])
+    .filter((b) => b.direction !== beamDir)
+    .map((b) => ({
+      ...b,
+      start: 0,
+      end: b.direction === "Y" ? Hplan : W,
+    }));
+
+  const usedNames = new Set(keptOther.map((b) => b.name).filter(Boolean));
+  let nameIdx = 1;
+  const nextName = (preferred?: string) => {
+    if (preferred && preferred.trim() && !usedNames.has(preferred)) {
+      usedNames.add(preferred);
+      return preferred;
+    }
+    let name = `${prefix}${nameIdx++}`;
+    while (usedNames.has(name)) name = `${prefix}${nameIdx++}`;
+    usedNames.add(name);
+    return name;
+  };
+
+  const synced: PlanBeam[] = axes.map((ax, i) => {
+    const prev = existing[i];
+    const dims = prev ? parseSize(prev.size) : { b: B, h: H };
+    return {
+      id: prev?.id ?? uid("beam"),
+      name: nextName(prev?.name),
+      size: prev ? formatBeamSize(dims.b, dims.h) : defaultSize,
+      direction: beamDir,
+      axis: ax.pos,
+      axisId: ax.id,
+      start: 0,
+      end: beamDir === "Y" ? Hplan : W,
+      offset: Number.isFinite(prev?.offset) ? (prev!.offset as number) : B1,
+    };
+  });
+
+  const beams = dir === "X" ? [...synced, ...keptOther] : [...keptOther, ...synced];
+  return {
+    ...withAxes,
+    beams,
+    info: syncBeamInfo({
+      ...withAxes.info,
+      beamCountX: beams.filter((b) => b.direction === "Y").length,
+      beamCountY: beams.filter((b) => b.direction === "X").length,
+    }),
   };
 }
 

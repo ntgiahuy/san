@@ -25,6 +25,7 @@ import {
 import {
   addBeam,
   applyAxesToProject,
+  applyAxisCount,
   applyBeamCounts,
   applyBeamDimsToAll,
   axisSpan,
@@ -36,7 +37,6 @@ import {
   removeAxis,
   removeBeam,
   renameAxis,
-  setAxisCount,
   setAxisSpan,
   setPlanSize,
   sortAxes,
@@ -145,24 +145,9 @@ export function SlabApp() {
     );
   }
 
-  /** Đổi số trục: giữ kích thước sàn, chia đều vị trí (không đổi dầm). */
+  /** Đổi số trục: chia đều vị trí và thêm dầm tại tim từng trục. */
   function patchAxisCount(dir: "X" | "Y", value: number) {
-    const n = Math.max(2, Math.floor(value) || 2);
-    if (dir === "X") {
-      persist(
-        applyAxesToProject({
-          ...project,
-          axesX: setAxisCount(project.axesX ?? [], n, project.planWidth, "X"),
-        }),
-      );
-    } else {
-      persist(
-        applyAxesToProject({
-          ...project,
-          axesY: setAxisCount(project.axesY ?? [], n, project.planHeight, "Y"),
-        }),
-      );
-    }
+    persist(applyAxisCount(project, dir, value));
   }
 
   function selectedBaySpans() {
