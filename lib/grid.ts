@@ -208,7 +208,7 @@ export function bayRebarExtent(
   };
 }
 
-/** Hình chữ nhật cắt thép: ô thủng + sàn thấp (cắt tại mí da). */
+/** Hình chữ nhật cắt thép: ô thủng + sàn thấp (mí da — nới thêm cover khi cắt). */
 export function rebarCutRects(
   project: SlabProject,
 ): Array<{ x0: number; y0: number; x1: number; y1: number }> {
@@ -333,6 +333,47 @@ export function independentBeamGaps(
   return gaps;
 }
 
+/**
+ * Ô thủng / sàn thấp nằm sát biên → cắt nốt phần thép trên thân dầm biên
+ * (tránh đoạn thép dư giữa mí ô đặc biệt và da ngoài biên).
+ */
+export function edgeSpecialBayCuts(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+  along: "X" | "Y",
+  stripIndex: number,
+): Array<{ lo: number; hi: number }> {
+  const gaps: Array<{ lo: number; hi: number }> = [];
+  const INF = 1e12;
+  if (along === "X") {
+    const iy = stripIndex;
+    const n = axesX.length - 1;
+    if (n < 1) return gaps;
+    if (bayKindAt(project, axesX, axesY, 0, iy) !== "normal") {
+      const e = baySlabExtent(project, axesX, axesY, 0, iy);
+      gaps.push({ lo: -INF, hi: e.x1 });
+    }
+    if (bayKindAt(project, axesX, axesY, n - 1, iy) !== "normal") {
+      const e = baySlabExtent(project, axesX, axesY, n - 1, iy);
+      gaps.push({ lo: e.x0, hi: INF });
+    }
+  } else {
+    const ix = stripIndex;
+    const n = axesY.length - 1;
+    if (n < 1) return gaps;
+    if (bayKindAt(project, axesX, axesY, ix, 0) !== "normal") {
+      const e = baySlabExtent(project, axesX, axesY, ix, 0);
+      gaps.push({ lo: -INF, hi: e.y1 });
+    }
+    if (bayKindAt(project, axesX, axesY, ix, n - 1) !== "normal") {
+      const e = baySlabExtent(project, axesX, axesY, ix, n - 1);
+      gaps.push({ lo: e.y0, hi: INF });
+    }
+  }
+  return gaps;
+}
+
 /** Mọi khe thân dầm trung gian trên hàng/cột (để loại đoạn thép chỉ nằm trên thân dầm). */
 export function allIntermediateBeamGaps(
   project: SlabProject,
@@ -375,11 +416,20 @@ export function dropSegmentsInsideGaps(
   });
 }
 
+/** Nới khoảng cắt thêm cover — thép thụt vào khỏi da dầm / mí ô đặc biệt bằng lớp BV. */
+export function expandCutsByCover(
+  cuts: Array<{ lo: number; hi: number }>,
+  coverMm: number,
+): Array<{ lo: number; hi: number }> {
+  const c = Math.max(0, coverMm);
+  return cuts.map((cut) => ({ lo: cut.lo - c, hi: cut.hi + c }));
+}
+
 /**
  * Thép liên tục từ dầm biên đầu → dầm biên cuối:
  * điểm đầu/cuối = da dầm ngoài ± lớp bảo vệ (cover).
- * Cắt tại ô thủng / sàn thấp; không bố trí thép trên dầm độc lập
- * (dầm tiếp giáp ô thủng / sàn thấp — một hoặc hai bên).
+ * Cắt tại ô thủng / sàn thấp — mép cắt thụt vào bằng cover (không cắt sát da dầm).
+ * Không bố trí thép trên dầm độc lập (tiếp giáp ô thủng / sàn thấp).
  */
 export function stripRebarBarSegments(
   project: SlabProject,
@@ -414,16 +464,23 @@ export function stripRebarBarSegments(
       }
       if (!(yHi > yLo)) continue;
       const my = (yLo + yHi) / 2;
-      // Cắt mọi vùng thủng/thấp giao với hàng (không chỉ đúng điểm my — tránh lệch mép)
       const bandLo = yLo + 1;
       const bandHi = yHi - 1;
-      const obstacleCuts = cuts
-        .filter((r) => Math.min(r.y1, r.y0) < bandHi && Math.max(r.y1, r.y0) > bandLo)
-        .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) }));
-      const indep = independentBeamGaps(project, axesX, axesY, "X", iy);
+      const obstacleCuts = expandCutsByCover(
+        cuts
+          .filter((r) => Math.min(r.y1, r.y0) < bandHi && Math.max(r.y1, r.y0) > bandLo)
+          .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) })),
+        cover,
+      );
+      const indep = expandCutsByCover(independentBeamGaps(project, axesX, axesY, "X", iy), cover);
+      const edge = expandCutsByCover(edgeSpecialBayCuts(project, axesX, axesY, "X", iy), cover);
       const allGaps = allIntermediateBeamGaps(project, axesX, axesY, "X", iy);
-      const hCuts = [...obstacleCuts, ...indep];
-      const segs = dropSegmentsInsideGaps(subtract1D(xBarLo, xBarHi, hCuts), [...indep, ...allGaps]);
+      const hCuts = [...obstacleCuts, ...indep, ...edge];
+      const segs = dropSegmentsInsideGaps(subtract1D(xBarLo, xBarHi, hCuts), [
+        ...indep,
+        ...edge,
+        ...allGaps,
+      ]);
       for (const s of segs) {
         out.push({ dir: "X", x0: s.lo, x1: s.hi, y: my });
       }
@@ -446,13 +503,21 @@ export function stripRebarBarSegments(
       const mx = (xLo + xHi) / 2;
       const bandLo = xLo + 1;
       const bandHi = xHi - 1;
-      const obstacleCuts = cuts
-        .filter((r) => Math.min(r.x1, r.x0) < bandHi && Math.max(r.x1, r.x0) > bandLo)
-        .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) }));
-      const indep = independentBeamGaps(project, axesX, axesY, "Y", ix);
+      const obstacleCuts = expandCutsByCover(
+        cuts
+          .filter((r) => Math.min(r.x1, r.x0) < bandHi && Math.max(r.x1, r.x0) > bandLo)
+          .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) })),
+        cover,
+      );
+      const indep = expandCutsByCover(independentBeamGaps(project, axesX, axesY, "Y", ix), cover);
+      const edge = expandCutsByCover(edgeSpecialBayCuts(project, axesX, axesY, "Y", ix), cover);
       const allGaps = allIntermediateBeamGaps(project, axesX, axesY, "Y", ix);
-      const vCuts = [...obstacleCuts, ...indep];
-      const segs = dropSegmentsInsideGaps(subtract1D(yBarLo, yBarHi, vCuts), [...indep, ...allGaps]);
+      const vCuts = [...obstacleCuts, ...indep, ...edge];
+      const segs = dropSegmentsInsideGaps(subtract1D(yBarLo, yBarHi, vCuts), [
+        ...indep,
+        ...edge,
+        ...allGaps,
+      ]);
       for (const s of segs) {
         out.push({ dir: "Y", y0: s.lo, y1: s.hi, x: mx });
       }
