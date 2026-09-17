@@ -910,6 +910,17 @@ export function SlabApp() {
                         </div>
                       ))}
                     </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="mt-2 w-full"
+                      onClick={() => {
+                        patchAxisCount("X", (project.axesX?.length ?? 2) + 1);
+                        setStatus("Đã thêm trục phương X (kèm dầm).");
+                      }}
+                    >
+                      <Plus /> Thêm Trục phương X
+                    </Button>
                   </div>
                 ) : (
                   <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">
@@ -950,6 +961,17 @@ export function SlabApp() {
                         </div>
                       ))}
                     </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="mt-2 w-full"
+                      onClick={() => {
+                        patchAxisCount("Y", (project.axesY?.length ?? 2) + 1);
+                        setStatus("Đã thêm trục phương Y (kèm dầm).");
+                      }}
+                    >
+                      <Plus /> Thêm Trục phương Y
+                    </Button>
                   </div>
                 )}
               </Panel>
