@@ -1310,9 +1310,6 @@ export function SlabApp() {
                   <Button size="sm" variant="danger" onClick={delZone} disabled={!selectedZoneId}>
                     <Trash2 /> Xóa
                   </Button>
-                  <Button size="sm" className="bg-amber-600 text-white hover:bg-amber-500" onClick={() => void exportPdf()}>
-                    Vẽ thép sàn (PDF)
-                  </Button>
                   <Button
                     size="sm"
                     variant="secondary"
@@ -1340,9 +1337,6 @@ export function SlabApp() {
                     disabled={planSelection?.kind !== "bay"}
                   >
                     Sàn thường
-                  </Button>
-                  <Button size="sm" variant="secondary" className="text-amber-300" onClick={() => setStatus(`Thống kê: ${model.schedule.length} số hiệu · ${model.totalWeight.toFixed(1)} kg`)}>
-                    Thống kê thép sàn
                   </Button>
                 </div>
                 <p className="mt-1.5 text-[11px] text-zinc-500">
