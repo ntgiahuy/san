@@ -95,6 +95,7 @@ export function SlabApp() {
   const [zoneForm, setZoneForm] = useState<RebarZone>(() => draftZone());
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [planSelection, setPlanSelection] = useState<PlanSelection | null>(null);
+  const [axisDirTab, setAxisDirTab] = useState<"X" | "Y">("X");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -942,19 +943,41 @@ export function SlabApp() {
           {tab === "axes" && (
             <div className="flex flex-col gap-3">
               <Panel title="2. Số liệu trục" className="min-w-0 w-full">
-                <div className="flex flex-col gap-3">
+                <div className="mb-2 flex gap-0.5 border-b border-zinc-700">
+                  {(
+                    [
+                      { id: "X" as const, label: "Trục phương X" },
+                      { id: "Y" as const, label: "Trục phương Y" },
+                    ] as const
+                  ).map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setAxisDirTab(t.id)}
+                      className={`shrink-0 rounded-t px-2.5 py-1.5 text-[12px] ${
+                        axisDirTab === t.id
+                          ? "bg-zinc-800 font-semibold text-sky-300"
+                          : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {axisDirTab === "X" ? (
                   <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">
-                    <div className="mb-2 text-xs font-semibold text-sky-300">Trục phương X</div>
                     <div className="space-y-1.5">
                       {sortAxes(project.axesX ?? []).map((ax, i) => (
-                        <div key={ax.id} className="flex flex-wrap items-center gap-1.5">
+                        <div key={ax.id} className="flex min-w-0 flex-nowrap items-center gap-1.5">
                           <Input
-                            className="w-14"
+                            className="w-12 max-w-12 shrink-0"
                             value={ax.name}
                             onChange={(e) => updateAxesX(renameAxis(project.axesX, ax.id, e.target.value))}
                           />
                           <Input
                             type="number"
+                            className="min-w-0 w-auto flex-1"
                             title={i === 0 ? "Vị trí gốc (mm)" : "Khoảng cách từ trục trước (mm)"}
                             value={axisSpan(project.axesX, i)}
                             onChange={(e) => {
@@ -968,11 +991,11 @@ export function SlabApp() {
                               }
                             }}
                           />
-                          <span className="text-[11px] text-zinc-500">mm</span>
+                          <span className="shrink-0 text-[11px] text-zinc-500">mm</span>
                           <Button
                             variant="danger"
                             size="sm"
-                            className="px-1"
+                            className="shrink-0 px-1.5"
                             disabled={(project.axesX?.length ?? 0) <= 2}
                             onClick={() => updateAxesX(removeAxis(project.axesX, ax.id))}
                           >
@@ -985,18 +1008,19 @@ export function SlabApp() {
                       <Plus /> Thêm trục X (không thêm dầm)
                     </Button>
                   </div>
+                ) : (
                   <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">
-                    <div className="mb-2 text-xs font-semibold text-sky-300">Trục phương Y</div>
                     <div className="space-y-1.5">
                       {sortAxes(project.axesY ?? []).map((ay, i) => (
-                        <div key={ay.id} className="flex flex-wrap items-center gap-1.5">
+                        <div key={ay.id} className="flex min-w-0 flex-nowrap items-center gap-1.5">
                           <Input
-                            className="w-14"
+                            className="w-12 max-w-12 shrink-0"
                             value={ay.name}
                             onChange={(e) => updateAxesY(renameAxis(project.axesY, ay.id, e.target.value))}
                           />
                           <Input
                             type="number"
+                            className="min-w-0 w-auto flex-1"
                             title={i === 0 ? "Vị trí gốc (mm)" : "Khoảng cách từ trục trước (mm)"}
                             value={axisSpan(project.axesY, i)}
                             onChange={(e) => {
@@ -1010,11 +1034,11 @@ export function SlabApp() {
                               }
                             }}
                           />
-                          <span className="text-[11px] text-zinc-500">mm</span>
+                          <span className="shrink-0 text-[11px] text-zinc-500">mm</span>
                           <Button
                             variant="danger"
                             size="sm"
-                            className="px-1"
+                            className="shrink-0 px-1.5"
                             disabled={(project.axesY?.length ?? 0) <= 2}
                             onClick={() => updateAxesY(removeAxis(project.axesY, ay.id))}
                           >
@@ -1027,7 +1051,7 @@ export function SlabApp() {
                       <Plus /> Thêm trục Y (không thêm dầm)
                     </Button>
                   </div>
-                </div>
+                )}
               </Panel>
             </div>
           )}
