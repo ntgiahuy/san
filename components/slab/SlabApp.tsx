@@ -1690,9 +1690,9 @@ export function SlabApp() {
                     ref={selectedBeamPanelRef}
                     className="mt-3 rounded border border-sky-700/60 bg-sky-950/30 p-2"
                   >
-                    <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="mb-2 flex flex-col gap-1.5">
                       <div className="text-xs font-semibold text-sky-300">Dầm đang chọn</div>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-nowrap items-center gap-1.5">
                         <Button
                           size="sm"
                           variant="danger"
