@@ -168,6 +168,15 @@ export interface SectionCut {
   to: number;
 }
 
+/** Loại dầm đã lưu (D1, D2…) — dùng để gán tên/kích thước cho đoạn trên mặt bằng. */
+export interface BeamTypeDef {
+  id: string;
+  name: string;
+  size: string;
+  /** Lệch trục B1 (mm). */
+  offset: number;
+}
+
 export interface SlabProject {
   info: SlabInfo;
   /** Kích thước mặt bằng theo trục ngoài cùng (mm). */
@@ -178,6 +187,8 @@ export interface SlabProject {
   /** Trục phương Y (ngang) — tên A, B, C… */
   axesY: GridAxis[];
   beams: PlanBeam[];
+  /** Danh sách loại dầm (D1, D2…) người dùng thêm bằng nút Thêm. */
+  beamTypes?: BeamTypeDef[];
   openings: Opening[];
   lowSlabs: LowSlab[];
   zones: RebarZone[];

@@ -375,6 +375,34 @@ export function normalizeProject(raw: SlabProject): SlabProject {
     simple2: { ...base.simple2, ...raw.simple2 },
     economy2: { ...base.economy2, ...raw.economy2 },
     beams: raw.beams?.length ? raw.beams : base.beams,
+    beamTypes: (() => {
+      if (Array.isArray(raw.beamTypes) && raw.beamTypes.length > 0) {
+        return raw.beamTypes
+          .filter((t) => t && typeof t.name === "string" && t.name.trim())
+          .map((t) => ({
+            id: t.id || uid("bt"),
+            name: String(t.name).trim(),
+            size: String(t.size || sizeStr),
+            offset: Number.isFinite(t.offset) ? Math.round(t.offset) : Math.round(beamB / 2),
+          }));
+      }
+      // Dự án cũ: suy ra loại dầm từ tên dầm mặt bằng
+      const beams = raw.beams?.length ? raw.beams : base.beams;
+      const seen = new Set<string>();
+      return beams
+        .filter((b) => {
+          const k = (b.name || "").trim().toLowerCase();
+          if (!k || seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        })
+        .map((b) => ({
+          id: uid("bt"),
+          name: b.name.trim(),
+          size: b.size || sizeStr,
+          offset: Number.isFinite(b.offset) ? Math.round(b.offset) : Math.round(beamB / 2),
+        }));
+    })(),
     zones: raw.zones ?? base.zones,
     openings: raw.openings ?? [],
     lowSlabs: (raw.lowSlabs ?? []).map((ls) => ({

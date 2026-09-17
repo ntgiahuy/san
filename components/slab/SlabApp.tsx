@@ -24,25 +24,31 @@ import {
 } from "@/lib/calc";
 import {
   addBeam,
+  addOrUpdateBeamType,
   applyAxesToProject,
   applyAxisCount,
   applyBeamCounts,
   applyBeamDimsToAll,
+  applyBeamTypeToBeams,
   axisSpan,
   baySlabExtent,
   beamSegments,
+  bumpBeamTypeName,
   equalizeAxisSpans,
   patchBeam,
   patchBeamOnAxis,
   patchBeamSegShift,
   getBeamSegShift,
+  patchBeamType,
   rectNearlyEquals,
   removeAxis,
   removeBeam,
+  removeBeamType,
   renameAxis,
   setAxisSpan,
   setPlanSize,
   sortAxes,
+  suggestNextBeamTypeName,
   syncBeamInfo,
   syncBeamsToAxes,
 } from "@/lib/grid";
@@ -429,7 +435,60 @@ export function SlabApp() {
     else if (sel.kind === "axis") setTab("axes");
   }
 
-  /** Danh sách dầm (một dòng / thanh), sắp theo tim. */
+  /** Danh sách loại dầm đã lưu (D1, D2…). */
+  function sortedBeamTypes() {
+    return [...(project.beamTypes ?? [])];
+  }
+
+  function handleListTypeClick(typeId: string, e: ReactMouseEvent) {
+    const types = sortedBeamTypes();
+    const idx = types.findIndex((t) => t.id === typeId);
+    if (idx < 0) return;
+    const t = types[idx];
+
+    if (e.shiftKey && listAnchorId) {
+      e.preventDefault();
+      const a = types.findIndex((x) => x.id === listAnchorId);
+      if (a >= 0) {
+        const lo = Math.min(a, idx);
+        const hi = Math.max(a, idx);
+        setListSelectedIds(types.slice(lo, hi + 1).map((x) => x.id));
+        setBulkBeamName(types[lo].name);
+        return;
+      }
+    }
+
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      setListSelectedIds((prev) => {
+        if (prev.includes(typeId)) return prev.filter((id) => id !== typeId);
+        return [...prev, typeId];
+      });
+      setListAnchorId(typeId);
+      setBulkBeamName(t.name);
+      return;
+    }
+
+    setListSelectedIds([typeId]);
+    setListAnchorId(typeId);
+    setBulkBeamName(t.name);
+    // Đưa H/B/B1 của loại lên form để chỉnh
+    const parsed = String(t.size || "").match(/^(\d+)\s*[x×]\s*(\d+)/i);
+    if (parsed) {
+      patchInfo({
+        beamNamePrefix: t.name,
+        beamB: Number(parsed[1]),
+        beamH: Number(parsed[2]),
+        beamB1: t.offset,
+        beamSizeX: t.size,
+        beamSizeY: t.size,
+      });
+    } else {
+      patchInfo({ beamNamePrefix: t.name });
+    }
+  }
+
+  /** Danh sách dầm mặt bằng (một dòng / thanh), sắp theo tim. */
   function sortedPlanBeams() {
     return [...(project.beams ?? [])].sort(
       (a, b) =>
@@ -484,22 +543,53 @@ export function SlabApp() {
   }
 
   function applyBulkBeamName() {
-    const name = bulkBeamName.trim();
-    if (!name) return;
-    const fromList = listSelectedIds;
     const fromPlan = [...new Set(beamMultiSelect.map((s) => s.beamId))];
-    const ids = fromList.length > 0 ? fromList : fromPlan;
-    if (ids.length === 0) {
-      setStatus("Chọn dầm trên danh sách hoặc đoạn dầm trên bản vẽ (Ctrl/Shift) rồi gán tên.");
+    // Ưu tiên: đoạn đã chọn trên bản vẽ; nếu chọn loại dầm trên list thì lấy tên loại
+    const selectedTypes = (project.beamTypes ?? []).filter((t) => listSelectedIds.includes(t.id));
+    const typeFromList = selectedTypes[0];
+    const name = (bulkBeamName.trim() || typeFromList?.name || "").trim();
+    if (!name) {
+      setStatus("Nhập tên hoặc chọn loại dầm trên danh sách, rồi chọn đoạn trên bản vẽ (Ctrl/Shift).");
       return;
     }
-    let next = project;
-    for (const id of ids) {
-      next = patchBeam(next, id, { name });
+    const targetBeamIds =
+      fromPlan.length > 0
+        ? fromPlan
+        : planSelection?.kind === "beam"
+          ? [planSelection.beamId]
+          : [];
+    if (targetBeamIds.length === 0) {
+      setStatus("Chọn đoạn dầm trên bản vẽ (Ctrl/Shift) để gán tên.");
+      return;
     }
-    persist(next);
-    setStatus(`Đã gán tên «${name}» cho ${ids.length} dầm.`);
+    const size = typeFromList?.size || `${project.info.beamB}x${project.info.beamH}`;
+    const offset =
+      typeFromList?.offset ??
+      (Number.isFinite(project.info.beamB1) ? project.info.beamB1 : Math.round((project.info.beamB || 220) / 2));
+    persist(applyBeamTypeToBeams(project, targetBeamIds, { name, size, offset }));
+    setStatus(`Đã gán «${name}» cho ${targetBeamIds.length} dầm trên mặt bằng.`);
     setBulkBeamName("");
+  }
+
+  /** Nút Thêm: lưu loại dầm (D1, D2…) vào danh sách với H/B/B1 hiện tại. */
+  function addBeamTypeFromForm() {
+    const name = (project.info.beamNamePrefix || "").trim();
+    if (!name) {
+      setStatus("Nhập tên dầm (VD: D1) rồi bấm Thêm.");
+      return;
+    }
+    const { beamB: B = 220, beamH: H = 500, beamB1: B1 = 110 } = project.info;
+    const next = addOrUpdateBeamType(project, {
+      name,
+      size: `${Math.round(B)}x${Math.round(H)}`,
+      offset: Math.round(B1),
+    });
+    const bumped = bumpBeamTypeName(name);
+    persist({
+      ...next,
+      info: { ...next.info, beamNamePrefix: bumped },
+    });
+    setStatus(`Đã thêm loại dầm «${name}» vào danh sách.`);
   }
 
   useEffect(() => {
@@ -1154,10 +1244,23 @@ export function SlabApp() {
               <Panel title="3. Số liệu dầm" className="min-w-0 w-full">
                 <div className="flex flex-col gap-2.5">
                   <Field label="Tên dầm" wide>
-                    <Input
-                      value={project.info.beamNamePrefix}
-                      onChange={(e) => patchInfo({ beamNamePrefix: e.target.value })}
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        className="min-w-0 flex-1"
+                        value={project.info.beamNamePrefix}
+                        placeholder="VD: D1"
+                        onChange={(e) => patchInfo({ beamNamePrefix: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addBeamTypeFromForm();
+                          }
+                        }}
+                      />
+                      <Button size="sm" variant="success" onClick={addBeamTypeFromForm} title="Lưu loại dầm vào danh sách">
+                        <Plus /> Thêm
+                      </Button>
+                    </div>
                   </Field>
                 </div>
                 <div className="mt-3 rounded border border-zinc-700 bg-zinc-950/60 p-2">
@@ -1220,19 +1323,19 @@ export function SlabApp() {
                     </div>
                   </div>
                   <p className="mb-1.5 text-[10px] text-zinc-500">
-                    Một dòng / loại dầm (D1, D2…). Shift+click chọn dải; Ctrl+click chọn từng dầm / đoạn trên bản vẽ để gán tên.
+                    Nhập tên (D1) + H/B/B1 → bấm Thêm. Shift/Ctrl chọn loại; chọn đoạn trên bản vẽ rồi Gán tên.
                   </p>
                   <div className="max-h-64 space-y-1.5 overflow-auto">
-                    {(project.beams ?? []).length === 0 && (
-                      <p className="text-[11px] text-zinc-500">Chưa có dầm. Thêm dầm hoặc nhập số lượng ở trên.</p>
+                    {(project.beamTypes ?? []).length === 0 && (
+                      <p className="text-[11px] text-zinc-500">
+                        Chưa có loại dầm. Điền tên (VD: D1) rồi bấm Thêm.
+                      </p>
                     )}
-                    {sortedPlanBeams().map((b) => {
-                      const segs = beamSegments(project, b);
-                      const selected = listSelectedIds.includes(b.id);
-                      const totalL = segs.reduce((s, seg) => s + seg.span, 0);
+                    {sortedBeamTypes().map((t) => {
+                      const selected = listSelectedIds.includes(t.id);
                       return (
                         <div
-                          key={b.id}
+                          key={t.id}
                           className={`flex flex-wrap items-center gap-1.5 rounded border px-1.5 py-1 ${
                             selected ? "border-emerald-600 bg-emerald-950/40" : "border-zinc-700"
                           }`}
@@ -1240,27 +1343,16 @@ export function SlabApp() {
                           <button
                             type="button"
                             className="min-w-0 flex-1 text-left text-xs text-zinc-200 hover:text-sky-300"
-                            onClick={(e) => handleListBeamClick(b.id, e)}
+                            onClick={(e) => handleListTypeClick(t.id, e)}
                           >
-                            {b.name || "(không tên)"} · {b.direction === "Y" ? "đứng" : "ngang"}
-                            {segs.length > 0
-                              ? ` · ${segs.length} đoạn · ΣL=${Math.round(totalL)}`
-                              : " · chưa có đoạn"}
+                            {t.name} · {t.size} · B1={Math.round(t.offset)}
                           </button>
                           <Input
                             className="w-16"
-                            title="Tên dầm"
-                            value={b.name}
-                            onChange={(e) => persist(patchBeam(project, b.id, { name: e.target.value }))}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <Input
-                            type="number"
-                            className="w-20"
-                            title="Vị trí tim dầm (mm)"
-                            value={Math.round(b.axis)}
+                            title="Tên loại dầm"
+                            value={t.name}
                             onChange={(e) =>
-                              persist(patchBeam(project, b.id, { axis: Number(e.target.value) || 0 }))
+                              persist(patchBeamType(project, t.id, { name: e.target.value }))
                             }
                             onClick={(e) => e.stopPropagation()}
                           />
@@ -1269,12 +1361,8 @@ export function SlabApp() {
                             variant="danger"
                             className="px-1"
                             onClick={() => {
-                              if (planSelection?.kind === "beam" && planSelection.beamId === b.id) {
-                                setPlanSelection(null);
-                              }
-                              setListSelectedIds((prev) => prev.filter((id) => id !== b.id));
-                              setBeamMultiSelect((prev) => prev.filter((s) => s.beamId !== b.id));
-                              persist(removeBeam(project, b.id));
+                              setListSelectedIds((prev) => prev.filter((id) => id !== t.id));
+                              persist(removeBeamType(project, t.id));
                             }}
                           >
                             <Trash2 />
@@ -1283,9 +1371,7 @@ export function SlabApp() {
                       );
                     })}
                   </div>
-                  {(listSelectedIds.length > 1 ||
-                    new Set(beamMultiSelect.map((s) => s.beamId)).size > 1 ||
-                    beamMultiSelect.length > 1) && (
+                  {(listSelectedIds.length > 0 || beamMultiSelect.length > 0) && (
                     <div className="mt-2 flex flex-wrap items-end gap-2 rounded border border-amber-800/50 bg-amber-950/20 p-2">
                       <Field label="Gán tên dầm đã chọn" wide>
                         <Input
@@ -1313,8 +1399,10 @@ export function SlabApp() {
                       </Button>
                       <p className="w-full text-[10px] text-zinc-500">
                         {listSelectedIds.length > 0
-                          ? `${listSelectedIds.length} dầm trên danh sách`
+                          ? `${listSelectedIds.length} loại trên danh sách`
                           : `${beamMultiSelect.length} đoạn trên bản vẽ`}
+                        {" · "}
+                        Chọn đoạn trên bản vẽ (Ctrl/Shift) rồi Gán tên.
                       </p>
                     </div>
                   )}

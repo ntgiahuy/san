@@ -1,4 +1,4 @@
-import type { BeamSegShift, GridAxis, PlanBeam, SlabInfo, SlabProject } from "./types";
+import type { BeamSegShift, BeamTypeDef, GridAxis, PlanBeam, SlabInfo, SlabProject } from "./types";
 import { uid } from "./utils";
 
 /** Thụt thép sàn khỏi da dầm (fallback nếu cover chưa có). */
@@ -1705,6 +1705,87 @@ export function addBeam(
     beams,
     info: syncBeamInfo({ ...base.info, beamCountX, beamCountY }),
   };
+}
+
+/** Tăng số đuôi tên dầm: D1 → D2, DX → DX1, D → D1. */
+export function bumpBeamTypeName(name: string): string {
+  const raw = (name || "D").trim() || "D";
+  const m = raw.match(/^(.*?)(\d+)$/);
+  if (m) return `${m[1]}${Number(m[2]) + 1}`;
+  return `${raw}1`;
+}
+
+/** Tên gợi ý cho loại dầm tiếp theo (D1, D2…). */
+export function suggestNextBeamTypeName(project: SlabProject): string {
+  const types = project.beamTypes ?? [];
+  if (types.length === 0) {
+    const prefix = (project.info.beamNamePrefix || "D").replace(/\d+$/, "") || "D";
+    return `${prefix}1`;
+  }
+  const last = types[types.length - 1]?.name || "D1";
+  return bumpBeamTypeName(last);
+}
+
+/**
+ * Lưu loại dầm vào danh sách (nút Thêm).
+ * Trùng tên → cập nhật size/B1; không trùng → thêm mới.
+ */
+export function addOrUpdateBeamType(
+  project: SlabProject,
+  input: { name: string; size?: string; offset?: number },
+): SlabProject {
+  const name = (input.name || "").trim();
+  if (!name) return project;
+  const { B, H, B1 } = beamDims(project.info);
+  const size = (input.size || formatBeamSize(B, H)).trim() || formatBeamSize(B, H);
+  const offset = Number.isFinite(input.offset as number)
+    ? Math.round(input.offset as number)
+    : Math.round(B1);
+  const types = [...(project.beamTypes ?? [])];
+  const idx = types.findIndex((t) => t.name.toLowerCase() === name.toLowerCase());
+  if (idx >= 0) {
+    types[idx] = { ...types[idx], name, size, offset };
+  } else {
+    types.push({ id: uid("bt"), name, size, offset });
+  }
+  return { ...project, beamTypes: types };
+}
+
+export function removeBeamType(project: SlabProject, typeId: string): SlabProject {
+  return {
+    ...project,
+    beamTypes: (project.beamTypes ?? []).filter((t) => t.id !== typeId),
+  };
+}
+
+export function patchBeamType(
+  project: SlabProject,
+  typeId: string,
+  patch: Partial<BeamTypeDef>,
+): SlabProject {
+  return {
+    ...project,
+    beamTypes: (project.beamTypes ?? []).map((t) => (t.id === typeId ? { ...t, ...patch } : t)),
+  };
+}
+
+/** Gán loại dầm (tên + BxH + B1) cho các dầm mặt bằng theo id. */
+export function applyBeamTypeToBeams(
+  project: SlabProject,
+  beamIds: string[],
+  type: Pick<BeamTypeDef, "name" | "size" | "offset">,
+): SlabProject {
+  const ids = new Set(beamIds);
+  const beams = (project.beams ?? []).map((b) => {
+    if (!ids.has(b.id)) return b;
+    return {
+      ...b,
+      name: type.name,
+      size: type.size || b.size,
+      offset: Number.isFinite(type.offset) ? type.offset : b.offset,
+    };
+  });
+  return { ...project, beams };
 }
 
 /** Xóa dầm theo id (không xóa trục). */

@@ -153,13 +153,29 @@ function sampleSections(): SectionCut[] {
 
 /** Sàn mẫu S1: 6.0 × 4.5 m, dày 100, thép 10a150. */
 export function createSampleS1(): SlabProject {
+  const beams = sampleBeams();
+  const seen = new Set<string>();
+  const beamTypes = beams
+    .filter((b) => {
+      const k = b.name.trim().toLowerCase();
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .map((b) => ({
+      id: uid("bt"),
+      name: b.name,
+      size: b.size,
+      offset: b.offset,
+    }));
   return applyAxesToProject({
     info: defaultInfo(),
     planWidth: 6000,
     planHeight: 4500,
     axesX: defaultAxesX(6000),
     axesY: defaultAxesY(4500),
-    beams: sampleBeams(),
+    beams,
+    beamTypes,
     openings: [],
     lowSlabs: [],
     zones: sampleZones(),
