@@ -40,6 +40,7 @@ import {
   setPlanSize,
   sortAxes,
   syncBeamInfo,
+  syncBeamsToAxes,
 } from "@/lib/grid";
 import { withBasePath } from "@/lib/base-path";
 import { downloadPdf, generateSlabPdf } from "@/lib/pdf/generate";
@@ -220,13 +221,18 @@ export function SlabApp() {
     const parsed = parseBeamSize(beam.size);
     const B = dims.beamB ?? parsed.b;
     const H = dims.beamH ?? parsed.h;
-    const B1 = dims.beamB1 ?? (Number.isFinite(beam.offset) ? beam.offset : Math.round(B / 2));
-    persist(
-      patchBeam(project, beam.id, {
-        size: `${Math.round(B)}x${Math.round(H)}`,
-        offset: B1 as number,
-      }),
-    );
+    const patched = patchBeam(project, beam.id, {
+      size: `${Math.round(B)}x${Math.round(H)}`,
+      ...(dims.beamB1 !== undefined
+        ? { offset: dims.beamB1 }
+        : {}),
+    });
+    // Đổi B (không sửa B1 tay) → tính lại B1 biên/giữa theo lưới trục
+    if (dims.beamB !== undefined && dims.beamB1 === undefined) {
+      persist(syncBeamsToAxes(patched));
+    } else {
+      persist(patched);
+    }
   }
 
 
@@ -980,8 +986,9 @@ export function SlabApp() {
                     </Field>
                   </div>
                   <p className="mt-1.5 text-[11px] text-zinc-500">
-                    B1: từ mép trái dầm đến tim dầm. Dầm và trục độc lập — thêm/bớt trục không đổi dầm và ngược lại.
-                    Kích thước: {project.info.beamSizeX || `${project.info.beamB}x${project.info.beamH}`}.
+                    B1 tự động: trục biên = da dầm ngoài (B1=0 hoặc B); trục giữa = tâm dầm (B1=B/2).
+                    Đổi khoảng cách tim trục thì dầm theo tim. Kích thước:{" "}
+                    {project.info.beamSizeX || `${project.info.beamB}x${project.info.beamH}`}.
                   </p>
                 </div>
                 <div className="mt-3 rounded border border-zinc-700 bg-zinc-950/60 p-2">

@@ -7,7 +7,7 @@ import type {
   SlabInfo,
   SlabProject,
 } from "./types";
-import { defaultAxesX, defaultAxesY } from "./grid";
+import { applyAxesToProject, defaultAxesX, defaultAxesY } from "./grid";
 import { uid } from "./utils";
 
 export function defaultInfo(): SlabInfo {
@@ -61,10 +61,11 @@ function sampleBeams(): PlanBeam[] {
   const H = 4500;
   const prefix = "D";
   const size = "220x500";
-  const B1 = 110;
+  const bw = 220;
   const beams: PlanBeam[] = [];
-  // Dầm trên trục X (chạy theo phương Y)
-  [0, W / 2, W].forEach((axis, i) => {
+  // Dầm trên trục X (chạy theo phương Y): biên B1=0/B, giữa B/2
+  [0, W / 2, W].forEach((axis, i, arr) => {
+    const offset = i === 0 ? 0 : i === arr.length - 1 ? bw : Math.round(bw / 2);
     beams.push({
       id: uid("beam"),
       name: `${prefix}${i + 1}`,
@@ -73,11 +74,12 @@ function sampleBeams(): PlanBeam[] {
       axis,
       start: 0,
       end: H,
-      offset: B1,
+      offset,
     });
   });
   // Dầm trên trục Y (chạy theo phương X)
-  [0, H].forEach((axis, i) => {
+  [0, H].forEach((axis, i, arr) => {
+    const offset = i === 0 ? 0 : i === arr.length - 1 ? bw : Math.round(bw / 2);
     beams.push({
       id: uid("beam"),
       name: `${prefix}${i + 4}`,
@@ -86,7 +88,7 @@ function sampleBeams(): PlanBeam[] {
       axis,
       start: 0,
       end: W,
-      offset: B1,
+      offset,
     });
   });
   return beams;
@@ -151,7 +153,7 @@ function sampleSections(): SectionCut[] {
 
 /** Sàn mẫu S1: 6.0 × 4.5 m, dày 100, thép 10a150. */
 export function createSampleS1(): SlabProject {
-  return {
+  return applyAxesToProject({
     info: defaultInfo(),
     planWidth: 6000,
     planHeight: 4500,
@@ -166,7 +168,7 @@ export function createSampleS1(): SlabProject {
     sections: sampleSections(),
     layoutPreset: "simple2",
     show3d: false,
-  };
+  });
 }
 
 export function createEmptyProject(): SlabProject {
