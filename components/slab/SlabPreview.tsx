@@ -23,9 +23,9 @@ import type { PlanSelection, SlabProject } from "@/lib/types";
 type Anchor = { leftPct: number; topPct: number };
 
 /** Bán kính vòng số hiệu trục (px SVG). */
-const AXIS_BUBBLE_R = 11;
-/** Khoảng hở giữa da dầm ngoài và vòng số hiệu. */
-const AXIS_BUBBLE_GAP = 28;
+const AXIS_BUBBLE_R = 6;
+/** Khoảng hở giữa da dầm ngoài và mép vòng (kề sàn, không chạm). */
+const AXIS_BUBBLE_GAP = 12;
 /** Tâm vòng số hiệu cách da dầm ngoài. */
 const AXIS_BUBBLE_OFFSET = AXIS_BUBBLE_R + AXIS_BUBBLE_GAP;
 
@@ -70,7 +70,7 @@ export function SlabPreview({
     bleed.yMax - project.planHeight,
   );
   // Chừa chỗ: dầm nhô ngoài plan + vòng số hiệu + khe hở
-  const pad = Math.max(72, AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 16 + bleedMm * 0.04);
+  const pad = Math.max(48, AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 12 + bleedMm * 0.04);
   const sx = (W - pad * 2) / Math.max(project.planWidth, 1);
   const sy = (H - pad * 2) / Math.max(project.planHeight, 1);
   const s = Math.min(sx, sy);
@@ -457,7 +457,8 @@ export function SlabPreview({
             {axesX.map((ax) => {
               const active = selection?.kind === "axis" && selection.dir === "X" && selection.axisId === ax.id;
               const cx = X(ax.pos);
-              const cy = Y(outerBottom) + AXIS_BUBBLE_OFFSET;
+              const edgeY = Y(outerBottom);
+              const cy = edgeY + AXIS_BUBBLE_OFFSET;
               const stroke = active ? "#79b8ff" : "#52525b";
               const sw = active ? 1.2 : 0.6;
               const interior = axisInteriorSegmentsX(project, axesX, axesY, ax.pos);
@@ -477,13 +478,25 @@ export function SlabPreview({
                       pointerEvents="none"
                     />
                   ))}
+                  {/* Đường dẫn nét mảnh gạch đứt: mép vòng → da sàn ngoài */}
+                  <line
+                    x1={cx}
+                    y1={cy - AXIS_BUBBLE_R}
+                    x2={cx}
+                    y2={edgeY}
+                    stroke="#79b8ff"
+                    strokeWidth={0.65}
+                    strokeDasharray="2 1.75"
+                    opacity={0.9}
+                    pointerEvents="none"
+                  />
                   <circle
                     cx={cx}
                     cy={cy}
                     r={AXIS_BUBBLE_R}
                     fill={active ? "#1e3a5f" : "#0d1117"}
                     stroke="#79b8ff"
-                    strokeWidth={active ? 2 : 1.2}
+                    strokeWidth={active ? 1.5 : 0.95}
                     className={interactive ? "cursor-pointer" : undefined}
                     pointerEvents={interactive ? "all" : "none"}
                     onClick={(e) => {
@@ -494,10 +507,10 @@ export function SlabPreview({
                   />
                   <text
                     x={cx}
-                    y={cy + 4}
+                    y={cy + 2.5}
                     textAnchor="middle"
                     fill="#79b8ff"
-                    fontSize="11"
+                    fontSize="8"
                     fontWeight="700"
                     pointerEvents="none"
                   >
@@ -508,7 +521,8 @@ export function SlabPreview({
             })}
             {axesY.map((ay) => {
               const active = selection?.kind === "axis" && selection.dir === "Y" && selection.axisId === ay.id;
-              const cx = X(outerLeft) - AXIS_BUBBLE_OFFSET;
+              const edgeX = X(outerLeft);
+              const cx = edgeX - AXIS_BUBBLE_OFFSET;
               const cy = Y(ay.pos);
               const stroke = active ? "#fbbf24" : "#52525b";
               const sw = active ? 1.2 : 0.6;
@@ -529,13 +543,25 @@ export function SlabPreview({
                       pointerEvents="none"
                     />
                   ))}
+                  {/* Đường dẫn nét mảnh gạch đứt: mép vòng → da sàn ngoài */}
+                  <line
+                    x1={cx + AXIS_BUBBLE_R}
+                    y1={cy}
+                    x2={edgeX}
+                    y2={cy}
+                    stroke="#fbbf24"
+                    strokeWidth={0.65}
+                    strokeDasharray="2 1.75"
+                    opacity={0.9}
+                    pointerEvents="none"
+                  />
                   <circle
                     cx={cx}
                     cy={cy}
                     r={AXIS_BUBBLE_R}
                     fill={active ? "#5b3b0a" : "#0d1117"}
                     stroke="#fbbf24"
-                    strokeWidth={active ? 2 : 1.2}
+                    strokeWidth={active ? 1.5 : 0.95}
                     className={interactive ? "cursor-pointer" : undefined}
                     pointerEvents={interactive ? "all" : "none"}
                     onClick={(e) => {
@@ -546,10 +572,10 @@ export function SlabPreview({
                   />
                   <text
                     x={cx}
-                    y={cy + 4}
+                    y={cy + 2.5}
                     textAnchor="middle"
                     fill="#fbbf24"
-                    fontSize="11"
+                    fontSize="8"
                     fontWeight="700"
                     pointerEvents="none"
                   >

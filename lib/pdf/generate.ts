@@ -31,8 +31,8 @@ const BLACK = rgb(0, 0, 0);
 const GRAY = rgb(0.45, 0.45, 0.45);
 const REBAR_RED = rgb(0.86, 0.15, 0.15);
 /** Vòng số hiệu trục PDF: bán kính + khoảng hở khỏi da dầm. */
-const AXIS_BUBBLE_R = 7;
-const AXIS_BUBBLE_GAP = 12;
+const AXIS_BUBBLE_R = 5.5;
+const AXIS_BUBBLE_GAP = 10;
 const AXIS_BUBBLE_OFFSET = AXIS_BUBBLE_R + AXIS_BUBBLE_GAP;
 
 type Ctx = {
@@ -194,14 +194,16 @@ function drawPlan(
     for (const span of axisInteriorSegmentsX(project, axesX, axesY, ax.pos)) {
       line(ctx, x, toY(span.hi), x, toY(span.lo), 0.35);
     }
+    // Đường dẫn nét mảnh gạch đứt: mép vòng → da sàn ngoài
+    line(ctx, x, by - AXIS_BUBBLE_R, x, edgeBottom, 0.3, BLACK, [2, 1.5]);
     ctx.page.drawCircle({
       x,
       y: ty(by),
       size: AXIS_BUBBLE_R,
       borderColor: BLACK,
-      borderWidth: 0.8,
+      borderWidth: 0.65,
     });
-    textSimple(ctx, ax.name, x, by + 2.5, 7, true, "center");
+    textSimple(ctx, ax.name, x, by + 2, 6, true, "center");
   }
   for (const ay of axesY) {
     const y = toY(ay.pos);
@@ -209,14 +211,15 @@ function drawPlan(
     for (const span of axisInteriorSegmentsY(project, axesX, axesY, ay.pos)) {
       line(ctx, toX(span.lo), y, toX(span.hi), y, 0.35);
     }
+    line(ctx, bx + AXIS_BUBBLE_R, y, edgeLeft, y, 0.3, BLACK, [2, 1.5]);
     ctx.page.drawCircle({
       x: bx,
       y: ty(y),
       size: AXIS_BUBBLE_R,
       borderColor: BLACK,
-      borderWidth: 0.8,
+      borderWidth: 0.65,
     });
-    textSimple(ctx, ay.name, bx, y + 2.5, 7, true, "center");
+    textSimple(ctx, ay.name, bx, y + 2, 6, true, "center");
   }
 
   for (const b of project.beams) {
