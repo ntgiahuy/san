@@ -2,10 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { effectiveZones, parseBeamSize } from "@/lib/calc";
-import { bayRebarExtent, baySlabExtent, beamDrawRange, sortAxes, SLAB_REBAR_HOOK_MM } from "@/lib/grid";
+import {
+  axisClearSpansX,
+  axisClearSpansY,
+  bayRebarExtent,
+  baySlabExtent,
+  beamDrawRange,
+  sortAxes,
+  SLAB_REBAR_HOOK_MM,
+} from "@/lib/grid";
 import type { PlanSelection, SlabProject } from "@/lib/types";
 
 type Anchor = { leftPct: number; topPct: number };
+
+/** Bán kính vòng số hiệu trục (px SVG). */
+const AXIS_BUBBLE_R = 11;
+/** Khoảng hở giữa mép dầm/sàn và vòng số hiệu — không dính vào dầm. */
+const AXIS_BUBBLE_GAP = 16;
+/** Tâm vòng số hiệu cách mép sàn. */
+const AXIS_BUBBLE_OFFSET = AXIS_BUBBLE_R + AXIS_BUBBLE_GAP;
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
@@ -36,7 +51,7 @@ export function SlabPreview({
 
   const W = 640;
   const H = 420;
-  const pad = 40;
+  const pad = Math.max(52, AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 6);
   const sx = (W - pad * 2) / Math.max(project.planWidth, 1);
   const sy = (H - pad * 2) / Math.max(project.planHeight, 1);
   const s = Math.min(sx, sy);
@@ -44,6 +59,8 @@ export function SlabPreview({
   const oy = pad + (H - pad * 2 - project.planHeight * s) / 2;
   const X = (mm: number) => ox + mm * s;
   const Y = (mm: number) => oy + (project.planHeight - mm) * s;
+  const clearSpansY = useMemo(() => axisClearSpansY(project, axesY), [project, axesY]);
+  const clearSpansX = useMemo(() => axisClearSpansX(project, axesX), [project, axesX]);
 
   function anchorFromSvg(svgX: number, svgY: number): Anchor {
     return {
@@ -69,8 +86,8 @@ export function SlabPreview({
     const axes = sel.dir === "X" ? axesX : axesY;
     const ax = axes.find((a) => a.id === sel.axisId);
     if (!ax) return { leftPct: 50, topPct: 40 };
-    if (sel.dir === "X") return anchorFromSvg(X(ax.pos), Y(0) + 36);
-    return anchorFromSvg(X(0) - 8, Y(ax.pos));
+    if (sel.dir === "X") return anchorFromSvg(X(ax.pos), Y(0) + AXIS_BUBBLE_OFFSET + 20);
+    return anchorFromSvg(X(0) - AXIS_BUBBLE_OFFSET, Y(ax.pos));
   }
 
   function pick(sel: PlanSelection | null, e?: MouseEvent) {
@@ -317,22 +334,41 @@ export function SlabPreview({
             {bayNodes}
             {axesX.map((ax) => {
               const active = selection?.kind === "axis" && selection.dir === "X" && selection.axisId === ax.id;
+              const cx = X(ax.pos);
+              const cy = Y(0) + AXIS_BUBBLE_OFFSET;
+              const stroke = active ? "#79b8ff" : "#52525b";
+              const sw = active ? 1.2 : 0.6;
               return (
                 <g key={`ax-${ax.id}`}>
+                  {/* Nối vòng số hiệu tới mép sàn — nằm ngoài dầm */}
                   <line
-                    x1={X(ax.pos)}
-                    y1={Y(0)}
-                    x2={X(ax.pos)}
-                    y2={Y(project.planHeight)}
-                    stroke={active ? "#79b8ff" : "#52525b"}
-                    strokeWidth={active ? 1.2 : 0.6}
+                    x1={cx}
+                    y1={cy - AXIS_BUBBLE_R}
+                    x2={cx}
+                    y2={Y(0)}
+                    stroke={stroke}
+                    strokeWidth={sw}
                     strokeDasharray="3 3"
                     pointerEvents="none"
                   />
+                  {/* Tim trục chỉ trong khoảng trống giữa da dầm ngang */}
+                  {clearSpansY.map((span, i) => (
+                    <line
+                      key={`ax-span-${ax.id}-${i}`}
+                      x1={cx}
+                      y1={Y(span.hi)}
+                      x2={cx}
+                      y2={Y(span.lo)}
+                      stroke={stroke}
+                      strokeWidth={sw}
+                      strokeDasharray="3 3"
+                      pointerEvents="none"
+                    />
+                  ))}
                   <circle
-                    cx={X(ax.pos)}
-                    cy={Y(0) + 16}
-                    r="11"
+                    cx={cx}
+                    cy={cy}
+                    r={AXIS_BUBBLE_R}
                     fill={active ? "#1e3a5f" : "#0d1117"}
                     stroke="#79b8ff"
                     strokeWidth={active ? 2 : 1.2}
@@ -345,8 +381,8 @@ export function SlabPreview({
                     }}
                   />
                   <text
-                    x={X(ax.pos)}
-                    y={Y(0) + 20}
+                    x={cx}
+                    y={cy + 4}
                     textAnchor="middle"
                     fill="#79b8ff"
                     fontSize="11"
@@ -360,22 +396,41 @@ export function SlabPreview({
             })}
             {axesY.map((ay) => {
               const active = selection?.kind === "axis" && selection.dir === "Y" && selection.axisId === ay.id;
+              const cx = X(0) - AXIS_BUBBLE_OFFSET;
+              const cy = Y(ay.pos);
+              const stroke = active ? "#fbbf24" : "#52525b";
+              const sw = active ? 1.2 : 0.6;
               return (
                 <g key={`ay-${ay.id}`}>
+                  {/* Nối vòng số hiệu tới mép sàn — nằm ngoài dầm */}
                   <line
-                    x1={X(0)}
-                    y1={Y(ay.pos)}
-                    x2={X(project.planWidth)}
-                    y2={Y(ay.pos)}
-                    stroke={active ? "#fbbf24" : "#52525b"}
-                    strokeWidth={active ? 1.2 : 0.6}
+                    x1={cx + AXIS_BUBBLE_R}
+                    y1={cy}
+                    x2={X(0)}
+                    y2={cy}
+                    stroke={stroke}
+                    strokeWidth={sw}
                     strokeDasharray="3 3"
                     pointerEvents="none"
                   />
+                  {/* Tim trục chỉ trong khoảng trống giữa da dầm đứng */}
+                  {clearSpansX.map((span, i) => (
+                    <line
+                      key={`ay-span-${ay.id}-${i}`}
+                      x1={X(span.lo)}
+                      y1={cy}
+                      x2={X(span.hi)}
+                      y2={cy}
+                      stroke={stroke}
+                      strokeWidth={sw}
+                      strokeDasharray="3 3"
+                      pointerEvents="none"
+                    />
+                  ))}
                   <circle
-                    cx={X(0) - 16}
-                    cy={Y(ay.pos)}
-                    r="11"
+                    cx={cx}
+                    cy={cy}
+                    r={AXIS_BUBBLE_R}
                     fill={active ? "#5b3b0a" : "#0d1117"}
                     stroke="#fbbf24"
                     strokeWidth={active ? 2 : 1.2}
@@ -388,8 +443,8 @@ export function SlabPreview({
                     }}
                   />
                   <text
-                    x={X(0) - 16}
-                    y={Y(ay.pos) + 4}
+                    x={cx}
+                    y={cy + 4}
                     textAnchor="middle"
                     fill="#fbbf24"
                     fontSize="11"

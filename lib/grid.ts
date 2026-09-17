@@ -77,7 +77,10 @@ export function horizontalBeamSegExtent(
   return { xLo: faceLo.lo, xHi: faceHi.hi };
 }
 
-/** Phạm vi thép sàn trong ô: nằm trên dầm, thụt 50mm từ da dầm ngoài. */
+/**
+ * Phạm vi thép sàn trong ô: giữa da trong hai dầm, thụt insetMm vào trong ô.
+ * Không kéo thép xuyên qua thân dầm.
+ */
 export function bayRebarExtent(
   project: SlabProject,
   axesX: GridAxis[],
@@ -86,26 +89,59 @@ export function bayRebarExtent(
   iy: number,
   insetMm = SLAB_REBAR_FACE_INSET_MM,
 ): { x0: number; x1: number; y0: number; y1: number; mx: number; my: number } {
-  const ax0 = axesX[ix];
-  const ax1 = axesX[ix + 1];
-  const ay0 = axesY[iy];
-  const ay1 = axesY[iy + 1];
-  const left = beamOuterFaces(ax0.pos, beamSectionOnAxis(project, "Y", ax0));
-  const right = beamOuterFaces(ax1.pos, beamSectionOnAxis(project, "Y", ax1));
-  const bottom = beamOuterFaces(ay0.pos, beamSectionOnAxis(project, "X", ay0));
-  const top = beamOuterFaces(ay1.pos, beamSectionOnAxis(project, "X", ay1));
-  const x0 = left.lo + insetMm;
-  const x1 = right.hi - insetMm;
-  const y0 = bottom.lo + insetMm;
-  const y1 = top.hi - insetMm;
+  const slab = baySlabExtent(project, axesX, axesY, ix, iy);
+  const x0 = slab.x0 + insetMm;
+  const x1c = Math.max(x0, slab.x1 - insetMm);
+  const y0 = slab.y0 + insetMm;
+  const y1c = Math.max(y0, slab.y1 - insetMm);
   return {
     x0,
-    x1: Math.max(x0, x1),
+    x1: x1c,
     y0,
-    y1: Math.max(y0, y1),
-    mx: (ax0.pos + ax1.pos) / 2,
-    my: (ay0.pos + ay1.pos) / 2,
+    y1: y1c,
+    mx: (x0 + x1c) / 2,
+    my: (y0 + y1c) / 2,
   };
+}
+
+/**
+ * Các đoạn tim trục đứng (phương X) nằm trong khoảng trống giữa da dầm ngang —
+ * không vẽ xuyên thân dầm.
+ */
+export function axisClearSpansY(
+  project: SlabProject,
+  axesY: GridAxis[],
+): { lo: number; hi: number }[] {
+  const sorted = sortAxes(axesY);
+  const spans: { lo: number; hi: number }[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const bottom = beamOuterFaces(sorted[i].pos, beamSectionOnAxis(project, "X", sorted[i]));
+    const top = beamOuterFaces(sorted[i + 1].pos, beamSectionOnAxis(project, "X", sorted[i + 1]));
+    const lo = bottom.hi;
+    const hi = top.lo;
+    if (hi > lo + 0.5) spans.push({ lo, hi });
+  }
+  return spans;
+}
+
+/**
+ * Các đoạn tim trục ngang (phương Y) nằm trong khoảng trống giữa da dầm đứng —
+ * không vẽ xuyên thân dầm.
+ */
+export function axisClearSpansX(
+  project: SlabProject,
+  axesX: GridAxis[],
+): { lo: number; hi: number }[] {
+  const sorted = sortAxes(axesX);
+  const spans: { lo: number; hi: number }[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const left = beamOuterFaces(sorted[i].pos, beamSectionOnAxis(project, "Y", sorted[i]));
+    const right = beamOuterFaces(sorted[i + 1].pos, beamSectionOnAxis(project, "Y", sorted[i + 1]));
+    const lo = left.hi;
+    const hi = right.lo;
+    if (hi > lo + 0.5) spans.push({ lo, hi });
+  }
+  return spans;
 }
 
 /**

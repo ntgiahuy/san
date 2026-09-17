@@ -9,10 +9,10 @@ import {
   type ScheduleRow,
 } from "../calc";
 import {
+  axisClearSpansX,
+  axisClearSpansY,
   bayRebarExtent,
   beamDrawRange,
-  beamOuterFaces,
-  beamSectionOnAxis,
   sortAxes,
   SLAB_REBAR_HOOK_MM,
 } from "../grid";
@@ -23,6 +23,10 @@ const PAGE_H = 1191;
 const BLACK = rgb(0, 0, 0);
 const GRAY = rgb(0.45, 0.45, 0.45);
 const REBAR_RED = rgb(0.86, 0.15, 0.15);
+/** Vòng số hiệu trục PDF: bán kính + khoảng hở khỏi mép dầm. */
+const AXIS_BUBBLE_R = 7;
+const AXIS_BUBBLE_GAP = 10;
+const AXIS_BUBBLE_OFFSET = AXIS_BUBBLE_R + AXIS_BUBBLE_GAP;
 
 type Ctx = {
   page: PDFPage;
@@ -169,29 +173,42 @@ function drawPlan(
   const toX = (mm: number) => x0 + mm * s;
   const toY = (mm: number) => y0 + (project.planHeight - mm) * s;
 
-  for (const ax of project.axesX ?? []) {
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+  const clearSpansY = axisClearSpansY(project, axesY);
+  const clearSpansX = axisClearSpansX(project, axesX);
+
+  for (const ax of axesX) {
     const x = toX(ax.pos);
-    line(ctx, x, y0, x, y0 + ph, 0.35);
+    const by = y0 + ph + AXIS_BUBBLE_OFFSET;
+    line(ctx, x, y0 + ph, x, by - AXIS_BUBBLE_R, 0.35);
+    for (const span of clearSpansY) {
+      line(ctx, x, toY(span.hi), x, toY(span.lo), 0.35);
+    }
     ctx.page.drawCircle({
       x,
-      y: ty(y0 + ph + 12),
-      size: 7,
+      y: ty(by),
+      size: AXIS_BUBBLE_R,
       borderColor: BLACK,
       borderWidth: 0.8,
     });
-    textSimple(ctx, ax.name, x, y0 + ph + 15, 7, true, "center");
+    textSimple(ctx, ax.name, x, by + 2.5, 7, true, "center");
   }
-  for (const ay of project.axesY ?? []) {
+  for (const ay of axesY) {
     const y = toY(ay.pos);
-    line(ctx, x0, y, x0 + pw, y, 0.35);
+    const bx = x0 - AXIS_BUBBLE_OFFSET;
+    line(ctx, bx + AXIS_BUBBLE_R, y, x0, y, 0.35);
+    for (const span of clearSpansX) {
+      line(ctx, toX(span.lo), y, toX(span.hi), y, 0.35);
+    }
     ctx.page.drawCircle({
-      x: x0 - 12,
+      x: bx,
       y: ty(y),
-      size: 7,
+      size: AXIS_BUBBLE_R,
       borderColor: BLACK,
       borderWidth: 0.8,
     });
-    textSimple(ctx, ay.name, x0 - 12, y + 2.5, 7, true, "center");
+    textSimple(ctx, ay.name, bx, y + 2.5, 7, true, "center");
   }
 
   for (const b of project.beams) {
@@ -205,9 +222,7 @@ function drawPlan(
     textSimple(ctx, o.name || "Ô", x + (o.w * s) / 2, y + (o.h * s) / 2, 6, false, "center");
   }
 
-  // Mỗi ô sàn: 1 cây X + 1 cây Y qua tim; đỏ, móc 50mm hai đầu; thụt 50mm từ da dầm
-  const axesX = sortAxes(project.axesX ?? []);
-  const axesY = sortAxes(project.axesY ?? []);
+  // Mỗi ô sàn: 1 cây X + 1 cây Y qua tim ô; đỏ, móc 50mm hai đầu; không xuyên thân dầm
   const hook = SLAB_REBAR_HOOK_MM;
   for (let ix = 0; ix < axesX.length - 1; ix++) {
     for (let iy = 0; iy < axesY.length - 1; iy++) {
@@ -237,8 +252,8 @@ function drawPlan(
     });
   }
 
-  dimH(ctx, x0, x0 + pw, y0 + ph + 14, `${Math.round(project.planWidth)}`);
-  dimV(ctx, x0 - 14, y0, y0 + ph, `${Math.round(project.planHeight)}`);
+  dimH(ctx, x0, x0 + pw, y0 + ph + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 6, `${Math.round(project.planWidth)}`);
+  dimV(ctx, x0 - AXIS_BUBBLE_OFFSET - AXIS_BUBBLE_R - 6, y0, y0 + ph, `${Math.round(project.planHeight)}`);
   textSimple(ctx, "MẶT BẰNG CỐT THÉP SÀN", ox + maxW / 2, oy - 16, 11, true, "center");
   textSimple(
     ctx,
@@ -250,7 +265,7 @@ function drawPlan(
     "center",
   );
 
-  return y0 + ph + 28;
+  return y0 + ph + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 20;
 }
 
 function drawBeam(
