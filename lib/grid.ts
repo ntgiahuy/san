@@ -543,6 +543,63 @@ export function stripRebarBarSegments(
     }
   }
 
+  // Sàn thấp chế độ cắt: bố trí thép riêng trong ô + lên thân dầm quanh ô (tách với sàn thường)
+  out.push(...cutLowSlabRebarSegments(project, axesX, axesY));
+  return out;
+}
+
+/**
+ * Thép riêng cho từng ô sàn thấp chế độ cắt:
+ * chạy trong lòng ô và lên thân dầm biên của ô (da ngoài ± lớp BV).
+ * Độc lập với thép sàn thường (đã bị cắt tại mí da ô).
+ */
+export function cutLowSlabRebarSegments(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+): RebarBarSeg[] {
+  const cover = slabCoverMm(project);
+  const out: RebarBarSeg[] = [];
+  if (axesX.length < 2 || axesY.length < 2) return out;
+
+  for (const ls of project.lowSlabs ?? []) {
+    if ((ls.rebarMode ?? "press") !== "cut") continue;
+
+    let ix = -1;
+    let iy = -1;
+    for (let j = 0; j < axesY.length - 1 && iy < 0; j++) {
+      for (let i = 0; i < axesX.length - 1; i++) {
+        const slab = baySlabExtent(project, axesX, axesY, i, j);
+        if (rectNearlyEquals(ls, slab.x0, slab.y0, slab.x1, slab.y1)) {
+          ix = i;
+          iy = j;
+          break;
+        }
+      }
+    }
+    if (ix < 0 || iy < 0) continue;
+
+    const ax0 = axesX[ix];
+    const ax1 = axesX[ix + 1];
+    const ay0 = axesY[iy];
+    const ay1 = axesY[iy + 1];
+    const left = beamOuterFaces(ax0.pos, beamSectionOnAxis(project, "Y", ax0));
+    const right = beamOuterFaces(ax1.pos, beamSectionOnAxis(project, "Y", ax1));
+    const bottom = beamOuterFaces(ay0.pos, beamSectionOnAxis(project, "X", ay0));
+    const top = beamOuterFaces(ay1.pos, beamSectionOnAxis(project, "X", ay1));
+
+    // Lên thân dầm: từ da ngoài dầm biên + cover → da ngoài dầm biên kia − cover
+    const x0 = left.lo + cover;
+    const x1 = right.hi - cover;
+    const y0 = bottom.lo + cover;
+    const y1 = top.hi - cover;
+    const slab = baySlabExtent(project, axesX, axesY, ix, iy);
+    const mx = (slab.x0 + slab.x1) / 2;
+    const my = (slab.y0 + slab.y1) / 2;
+
+    if (x1 - x0 > 1) out.push({ dir: "X", x0, x1, y: my });
+    if (y1 - y0 > 1) out.push({ dir: "Y", y0, y1, x: mx });
+  }
   return out;
 }
 

@@ -1388,7 +1388,7 @@ export function SlabApp() {
                           title={
                             mode === "press"
                               ? "Thép chạy như sàn thường; nhấn xuống tại dầm quanh ô bằng chênh cao độ"
-                              : "Cắt thép độc lập với sàn thường (giống ô thủng)"
+                              : "Tách với sàn thường; vẫn bố trí thép trong ô thấp và lên thân dầm quanh ô"
                           }
                         >
                           {label}
@@ -1399,7 +1399,7 @@ export function SlabApp() {
                   <p className="mt-1.5 text-[10px] leading-snug text-zinc-500">
                     {lowRebarMode === "press"
                       ? "Nhấn: thép đi thẳng xuyên ô; tại dầm quanh ô nhấn xuống bằng chênh cao độ sàn thấp."
-                      : "Cắt: thép cắt tại mí da ô sàn thấp (trừ lớp BV), tách với sàn thường."}
+                      : "Cắt: tách với sàn thường; vẫn bố trí thép trong ô sàn thấp và lên thân dầm quanh ô."}
                   </p>
                 </div>
               </Panel>
