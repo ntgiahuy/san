@@ -297,8 +297,10 @@ export function bayKindAt(
 }
 
 /**
- * Khe thân dầm trên một hàng/cột mà ít nhất một bên là ô thủng / sàn thấp
- * → dầm độc lập đối với thép sàn: không bố trí thép trên thân dầm.
+ * Dầm độc lập: cả hai bên đều không phải sàn thường (ô thủng / sàn thấp)
+ * → không bố trí thép sàn trên thân dầm.
+ * Dầm chỉ tiếp giáp ô đặc biệt một bên vẫn có thép trên thân dầm
+ * (cắt tại mí da ô đặc biệt − lớp BV).
  */
 export function independentBeamGaps(
   project: SlabProject,
@@ -313,8 +315,7 @@ export function independentBeamGaps(
     for (let ix = 0; ix < axesX.length - 2; ix++) {
       const left = bayKindAt(project, axesX, axesY, ix, iy);
       const right = bayKindAt(project, axesX, axesY, ix + 1, iy);
-      // Chỉ đi xuyên dầm khi cả hai bên đều là sàn thường
-      if (left === "normal" && right === "normal") continue;
+      if (left === "normal" || right === "normal") continue;
       const a = baySlabExtent(project, axesX, axesY, ix, iy);
       const b = baySlabExtent(project, axesX, axesY, ix + 1, iy);
       if (b.x0 > a.x1 + 0.5) gaps.push({ lo: a.x1, hi: b.x0 });
@@ -324,7 +325,7 @@ export function independentBeamGaps(
     for (let iy = 0; iy < axesY.length - 2; iy++) {
       const below = bayKindAt(project, axesX, axesY, ix, iy);
       const above = bayKindAt(project, axesX, axesY, ix, iy + 1);
-      if (below === "normal" && above === "normal") continue;
+      if (below === "normal" || above === "normal") continue;
       const a = baySlabExtent(project, axesX, axesY, ix, iy);
       const b = baySlabExtent(project, axesX, axesY, ix, iy + 1);
       if (b.y0 > a.y1 + 0.5) gaps.push({ lo: a.y1, hi: b.y0 });
@@ -333,45 +334,42 @@ export function independentBeamGaps(
   return gaps;
 }
 
-/**
- * Ô thủng / sàn thấp nằm sát biên → cắt nốt phần thép trên thân dầm biên
- * (tránh đoạn thép dư giữa mí ô đặc biệt và da ngoài biên).
- */
-export function edgeSpecialBayCuts(
+/** Khoảng lòng ô sàn thường trên một hàng/cột (để giữ đoạn thép còn nối với sàn). */
+export function normalBaySpansAlongStrip(
   project: SlabProject,
   axesX: GridAxis[],
   axesY: GridAxis[],
   along: "X" | "Y",
   stripIndex: number,
 ): Array<{ lo: number; hi: number }> {
-  const gaps: Array<{ lo: number; hi: number }> = [];
-  const INF = 1e12;
+  const spans: Array<{ lo: number; hi: number }> = [];
   if (along === "X") {
     const iy = stripIndex;
-    const n = axesX.length - 1;
-    if (n < 1) return gaps;
-    if (bayKindAt(project, axesX, axesY, 0, iy) !== "normal") {
-      const e = baySlabExtent(project, axesX, axesY, 0, iy);
-      gaps.push({ lo: -INF, hi: e.x1 });
-    }
-    if (bayKindAt(project, axesX, axesY, n - 1, iy) !== "normal") {
-      const e = baySlabExtent(project, axesX, axesY, n - 1, iy);
-      gaps.push({ lo: e.x0, hi: INF });
+    for (let ix = 0; ix < axesX.length - 1; ix++) {
+      if (bayKindAt(project, axesX, axesY, ix, iy) !== "normal") continue;
+      const e = baySlabExtent(project, axesX, axesY, ix, iy);
+      spans.push({ lo: e.x0, hi: e.x1 });
     }
   } else {
     const ix = stripIndex;
-    const n = axesY.length - 1;
-    if (n < 1) return gaps;
-    if (bayKindAt(project, axesX, axesY, ix, 0) !== "normal") {
-      const e = baySlabExtent(project, axesX, axesY, ix, 0);
-      gaps.push({ lo: -INF, hi: e.y1 });
-    }
-    if (bayKindAt(project, axesX, axesY, ix, n - 1) !== "normal") {
-      const e = baySlabExtent(project, axesX, axesY, ix, n - 1);
-      gaps.push({ lo: e.y0, hi: INF });
+    for (let iy = 0; iy < axesY.length - 1; iy++) {
+      if (bayKindAt(project, axesX, axesY, ix, iy) !== "normal") continue;
+      const e = baySlabExtent(project, axesX, axesY, ix, iy);
+      spans.push({ lo: e.y0, hi: e.y1 });
     }
   }
-  return gaps;
+  return spans;
+}
+
+/** Giữ đoạn thép còn giao với ít nhất một ô sàn thường (kể cả phần kéo sang thân dầm tiếp giáp). */
+export function keepSegmentsTouchingNormalBays(
+  segs: Array<{ lo: number; hi: number }>,
+  normalSpans: Array<{ lo: number; hi: number }>,
+): Array<{ lo: number; hi: number }> {
+  if (normalSpans.length === 0) return [];
+  return segs.filter((s) =>
+    normalSpans.some((n) => s.hi > n.lo + 0.5 && s.lo < n.hi - 0.5),
+  );
 }
 
 /** Mọi khe thân dầm trung gian trên hàng/cột (để loại đoạn thép chỉ nằm trên thân dầm). */
@@ -428,8 +426,9 @@ export function expandCutsByCover(
 /**
  * Thép liên tục từ dầm biên đầu → dầm biên cuối:
  * điểm đầu/cuối = da dầm ngoài ± lớp bảo vệ (cover).
- * Cắt tại ô thủng / sàn thấp — mép cắt thụt vào bằng cover (không cắt sát da dầm).
- * Không bố trí thép trên dầm độc lập (tiếp giáp ô thủng / sàn thấp).
+ * Cắt tại ô thủng / sàn thấp: mép cắt = mí da ô đặc biệt ± cover
+ * (thép vẫn nằm trên thân dầm tiếp giáp một/hai bên).
+ * Không bố trí thép trên dầm độc lập (cả hai bên đều không có sàn thường).
  */
 export function stripRebarBarSegments(
   project: SlabProject,
@@ -472,15 +471,13 @@ export function stripRebarBarSegments(
           .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) })),
         cover,
       );
-      const indep = expandCutsByCover(independentBeamGaps(project, axesX, axesY, "X", iy), cover);
-      const edge = expandCutsByCover(edgeSpecialBayCuts(project, axesX, axesY, "X", iy), cover);
-      const allGaps = allIntermediateBeamGaps(project, axesX, axesY, "X", iy);
-      const hCuts = [...obstacleCuts, ...indep, ...edge];
-      const segs = dropSegmentsInsideGaps(subtract1D(xBarLo, xBarHi, hCuts), [
-        ...indep,
-        ...edge,
-        ...allGaps,
-      ]);
+      // Chỉ cắt hết thân dầm khi cả hai bên đều không có sàn thường
+      const indep = independentBeamGaps(project, axesX, axesY, "X", iy);
+      const normals = normalBaySpansAlongStrip(project, axesX, axesY, "X", iy);
+      const segs = keepSegmentsTouchingNormalBays(
+        dropSegmentsInsideGaps(subtract1D(xBarLo, xBarHi, [...obstacleCuts, ...indep]), indep),
+        normals,
+      );
       for (const s of segs) {
         out.push({ dir: "X", x0: s.lo, x1: s.hi, y: my });
       }
@@ -509,15 +506,12 @@ export function stripRebarBarSegments(
           .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) })),
         cover,
       );
-      const indep = expandCutsByCover(independentBeamGaps(project, axesX, axesY, "Y", ix), cover);
-      const edge = expandCutsByCover(edgeSpecialBayCuts(project, axesX, axesY, "Y", ix), cover);
-      const allGaps = allIntermediateBeamGaps(project, axesX, axesY, "Y", ix);
-      const vCuts = [...obstacleCuts, ...indep, ...edge];
-      const segs = dropSegmentsInsideGaps(subtract1D(yBarLo, yBarHi, vCuts), [
-        ...indep,
-        ...edge,
-        ...allGaps,
-      ]);
+      const indep = independentBeamGaps(project, axesX, axesY, "Y", ix);
+      const normals = normalBaySpansAlongStrip(project, axesX, axesY, "Y", ix);
+      const segs = keepSegmentsTouchingNormalBays(
+        dropSegmentsInsideGaps(subtract1D(yBarLo, yBarHi, [...obstacleCuts, ...indep]), indep),
+        normals,
+      );
       for (const s of segs) {
         out.push({ dir: "Y", y0: s.lo, y1: s.hi, x: mx });
       }
