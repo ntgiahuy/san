@@ -817,23 +817,15 @@ export function SlabApp() {
     }
     const info = selectedBeamInfo();
     if (!info || planSelection?.kind !== "beam") return;
-    let next = applyBeamDimsToAll(project, {
+    // Chỉ áp B/H/B1 — chiều dài đoạn luôn theo nhịp trục (đầu/cuối trên dầm ngược phương)
+    const next = applyBeamDimsToAll(project, {
       beamB: info.B,
       beamH: info.H,
       beamB1: info.B1,
     });
-    // Áp dụng chiều dài cho các dầm cùng phương — không đụng trục
-    next = {
-      ...next,
-      beams: next.beams.map((b) => {
-        if (b.direction !== info.direction) return b;
-        const lo = Math.min(b.start, b.end);
-        return { ...b, start: lo, end: lo + info.length };
-      }),
-    };
     persist(next);
     setStatus(
-      `Đã áp dụng L=${Math.round(info.length)}, B=${info.B}, H=${info.H}, B1=${info.B1} cho các dầm cùng phương.`,
+      `Đã áp dụng B=${info.B}, H=${info.H}, B1=${info.B1} cho các dầm cùng phương (L theo nhịp trục).`,
     );
   }
 
@@ -1498,7 +1490,7 @@ export function SlabApp() {
                   <p className="mb-1.5 text-[10px] text-zinc-500">
                     Mỗi dòng: tên · H · B. Click đoạn để Gán tên (không cần phím); Shift/Ctrl chỉ khi chọn nhiều; hoặc Chèn dầm vào giữa ô.
                   </p>
-                  <div className="mb-1.5 grid grid-cols-[minmax(7rem,1fr)_3rem_3rem_1.75rem] items-center gap-1 px-1.5 text-[10px] text-zinc-500">
+                  <div className="mb-1.5 grid grid-cols-[minmax(3rem,1fr)_4.5rem_4.5rem_1.75rem] items-center gap-1.5 px-1.5 text-[10px] text-zinc-500">
                     <span className="truncate">Tên dầm</span>
                     <span className="text-center">H</span>
                     <span className="text-center">B</span>
@@ -1527,7 +1519,7 @@ export function SlabApp() {
                               handleListTypeClick(t.id, e as unknown as ReactMouseEvent);
                             }
                           }}
-                          className={`grid cursor-pointer grid-cols-[minmax(7rem,1fr)_3rem_3rem_1.75rem] items-center gap-1 rounded border px-1.5 py-1 ${
+                          className={`grid cursor-pointer grid-cols-[minmax(3rem,1fr)_4.5rem_4.5rem_1.75rem] items-center gap-1.5 rounded border px-1.5 py-1 ${
                             selected ? "border-emerald-600 bg-emerald-950/40" : "border-zinc-700"
                           }`}
                         >
@@ -1549,7 +1541,7 @@ export function SlabApp() {
                           />
                           <Input
                             type="number"
-                            className="w-full px-1 text-center"
+                            className="w-full"
                             title="H dầm (mm)"
                             value={hVal}
                             onChange={(e) =>
@@ -1566,7 +1558,7 @@ export function SlabApp() {
                           />
                           <Input
                             type="number"
-                            className="w-full px-1 text-center"
+                            className="w-full"
                             title="B dầm (mm)"
                             value={bVal}
                             onChange={(e) =>
