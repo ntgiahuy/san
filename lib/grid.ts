@@ -208,15 +208,12 @@ export function bayRebarExtent(
   };
 }
 
-/** Hình chữ nhật cắt thép: ô thủng + sàn thấp (mí da — nới thêm cover khi cắt). */
+/** Hình chữ nhật cắt thép: chỉ ô thủng (mí da — nới thêm cover khi cắt). Sàn thấp bố trí thép như sàn thường. */
 export function rebarCutRects(
   project: SlabProject,
 ): Array<{ x0: number; y0: number; x1: number; y1: number }> {
   const out: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
   for (const o of project.openings ?? []) {
-    out.push({ x0: o.x, y0: o.y, x1: o.x + o.w, y1: o.y + o.h });
-  }
-  for (const o of project.lowSlabs ?? []) {
     out.push({ x0: o.x, y0: o.y, x1: o.x + o.w, y1: o.y + o.h });
   }
   return out;
@@ -252,7 +249,8 @@ export type RebarBarSeg =
   | { dir: "Y"; y0: number; y1: number; x: number };
 
 /**
- * Thép ô sàn: từ da dầm biên trừ lớp BV; nếu gặp ô thủng / sàn thấp thì cắt tại mí da.
+ * Thép ô sàn: từ da dầm biên trừ lớp BV; nếu gặp ô thủng thì cắt tại mí da.
+ * Sàn thấp bố trí thép như sàn thường (chạy dầm bên này → dầm bên kia).
  * Mỗi ô: 1 cây phương X + 1 cây phương Y (có thể bị tách thành nhiều đoạn).
  */
 export function bayRebarBarSegments(
@@ -296,11 +294,21 @@ export function bayKindAt(
   return "normal";
 }
 
+/** Ô còn bố trí thép sàn: sàn thường hoặc sàn thấp (không phải ô thủng). */
+export function bayHasSlabRebar(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+  ix: number,
+  iy: number,
+): boolean {
+  return bayKindAt(project, axesX, axesY, ix, iy) !== "opening";
+}
+
 /**
- * Dầm độc lập: cả hai bên đều không phải sàn thường (ô thủng / sàn thấp)
- * → không bố trí thép sàn trên thân dầm.
- * Dầm chỉ tiếp giáp ô đặc biệt một bên vẫn có thép trên thân dầm
- * (cắt tại mí da ô đặc biệt − lớp BV).
+ * Dầm độc lập: cả hai bên đều là ô thủng → không bố trí thép sàn trên thân dầm.
+ * Sàn thấp coi như sàn thường (có thép). Dầm tiếp giáp ô thủng một bên vẫn có thép
+ * trên thân dầm (cắt tại mí da ô thủng − lớp BV).
  */
 export function independentBeamGaps(
   project: SlabProject,
@@ -313,9 +321,12 @@ export function independentBeamGaps(
   if (along === "X") {
     const iy = stripIndex;
     for (let ix = 0; ix < axesX.length - 2; ix++) {
-      const left = bayKindAt(project, axesX, axesY, ix, iy);
-      const right = bayKindAt(project, axesX, axesY, ix + 1, iy);
-      if (left === "normal" || right === "normal") continue;
+      if (
+        bayHasSlabRebar(project, axesX, axesY, ix, iy) ||
+        bayHasSlabRebar(project, axesX, axesY, ix + 1, iy)
+      ) {
+        continue;
+      }
       const a = baySlabExtent(project, axesX, axesY, ix, iy);
       const b = baySlabExtent(project, axesX, axesY, ix + 1, iy);
       if (b.x0 > a.x1 + 0.5) gaps.push({ lo: a.x1, hi: b.x0 });
@@ -323,9 +334,12 @@ export function independentBeamGaps(
   } else {
     const ix = stripIndex;
     for (let iy = 0; iy < axesY.length - 2; iy++) {
-      const below = bayKindAt(project, axesX, axesY, ix, iy);
-      const above = bayKindAt(project, axesX, axesY, ix, iy + 1);
-      if (below === "normal" || above === "normal") continue;
+      if (
+        bayHasSlabRebar(project, axesX, axesY, ix, iy) ||
+        bayHasSlabRebar(project, axesX, axesY, ix, iy + 1)
+      ) {
+        continue;
+      }
       const a = baySlabExtent(project, axesX, axesY, ix, iy);
       const b = baySlabExtent(project, axesX, axesY, ix, iy + 1);
       if (b.y0 > a.y1 + 0.5) gaps.push({ lo: a.y1, hi: b.y0 });
@@ -334,7 +348,7 @@ export function independentBeamGaps(
   return gaps;
 }
 
-/** Khoảng lòng ô sàn thường trên một hàng/cột (để giữ đoạn thép còn nối với sàn). */
+/** Khoảng lòng ô còn bố trí thép (sàn thường + sàn thấp) trên một hàng/cột. */
 export function normalBaySpansAlongStrip(
   project: SlabProject,
   axesX: GridAxis[],
@@ -346,14 +360,14 @@ export function normalBaySpansAlongStrip(
   if (along === "X") {
     const iy = stripIndex;
     for (let ix = 0; ix < axesX.length - 1; ix++) {
-      if (bayKindAt(project, axesX, axesY, ix, iy) !== "normal") continue;
+      if (!bayHasSlabRebar(project, axesX, axesY, ix, iy)) continue;
       const e = baySlabExtent(project, axesX, axesY, ix, iy);
       spans.push({ lo: e.x0, hi: e.x1 });
     }
   } else {
     const ix = stripIndex;
     for (let iy = 0; iy < axesY.length - 1; iy++) {
-      if (bayKindAt(project, axesX, axesY, ix, iy) !== "normal") continue;
+      if (!bayHasSlabRebar(project, axesX, axesY, ix, iy)) continue;
       const e = baySlabExtent(project, axesX, axesY, ix, iy);
       spans.push({ lo: e.y0, hi: e.y1 });
     }
@@ -361,7 +375,7 @@ export function normalBaySpansAlongStrip(
   return spans;
 }
 
-/** Giữ đoạn thép còn giao với ít nhất một ô sàn thường (kể cả phần kéo sang thân dầm tiếp giáp). */
+/** Giữ đoạn thép còn giao với ít nhất một ô có thép (thường/thấp), kể cả phần kéo sang thân dầm. */
 export function keepSegmentsTouchingNormalBays(
   segs: Array<{ lo: number; hi: number }>,
   normalSpans: Array<{ lo: number; hi: number }>,
@@ -426,9 +440,9 @@ export function expandCutsByCover(
 /**
  * Thép liên tục từ dầm biên đầu → dầm biên cuối:
  * điểm đầu/cuối = da dầm ngoài ± lớp bảo vệ (cover).
- * Cắt tại ô thủng / sàn thấp: mép cắt = mí da ô đặc biệt ± cover
- * (thép vẫn nằm trên thân dầm tiếp giáp một/hai bên).
- * Không bố trí thép trên dầm độc lập (cả hai bên đều không có sàn thường).
+ * Cắt tại ô thủng: mép cắt = mí da ô thủng ± cover (thép còn trên thân dầm tiếp giáp).
+ * Sàn thấp bố trí thép như sàn thường (chạy xuyên ô, dầm bên này → dầm bên kia).
+ * Không bố trí thép trên dầm độc lập (cả hai bên đều là ô thủng).
  */
 export function stripRebarBarSegments(
   project: SlabProject,
