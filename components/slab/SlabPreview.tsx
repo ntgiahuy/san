@@ -13,6 +13,7 @@ import {
   rectOpeningDiagonals,
   sortAxes,
   stripRebarBarSegments,
+  stripRebarPressMarks,
   SLAB_REBAR_HOOK_MM,
 } from "@/lib/grid";
 import type { PlanSelection, SlabProject } from "@/lib/types";
@@ -252,6 +253,7 @@ export function SlabPreview({
           fontWeight="600"
         >
           {ls.name || "ST"}
+          {(ls.rebarMode ?? "press") === "cut" ? " · cắt" : " · nhấn"}
         </text>
       </g>
     );
@@ -604,72 +606,149 @@ export function SlabPreview({
               const bars = stripRebarBarSegments(project, axesX, axesY);
               const hook = SLAB_REBAR_HOOK_MM;
               const stroke = "#ef4444";
-              return bars.map((bar, i) => {
-                if (bar.dir === "X") {
-                  return (
-                    <g key={`rebar-x-${i}`} pointerEvents="none">
-                      <line
-                        x1={X(bar.x0)}
-                        y1={Y(bar.y)}
-                        x2={X(bar.x1)}
-                        y2={Y(bar.y)}
-                        stroke={stroke}
-                        strokeWidth="1.6"
-                        opacity="0.95"
-                      />
-                      <line
-                        x1={X(bar.x0)}
-                        y1={Y(bar.y)}
-                        x2={X(bar.x0)}
-                        y2={Y(bar.y - hook)}
-                        stroke={stroke}
-                        strokeWidth="1.6"
-                        opacity="0.95"
-                      />
-                      <line
-                        x1={X(bar.x1)}
-                        y1={Y(bar.y)}
-                        x2={X(bar.x1)}
-                        y2={Y(bar.y - hook)}
-                        stroke={stroke}
-                        strokeWidth="1.6"
-                        opacity="0.95"
-                      />
+              const pressMarks = stripRebarPressMarks(project, axesX, axesY);
+              const tick = 70;
+              return (
+                <>
+                  {bars.map((bar, i) => {
+                    if (bar.dir === "X") {
+                      return (
+                        <g key={`rebar-x-${i}`} pointerEvents="none">
+                          <line
+                            x1={X(bar.x0)}
+                            y1={Y(bar.y)}
+                            x2={X(bar.x1)}
+                            y2={Y(bar.y)}
+                            stroke={stroke}
+                            strokeWidth="1.6"
+                            opacity="0.95"
+                          />
+                          <line
+                            x1={X(bar.x0)}
+                            y1={Y(bar.y)}
+                            x2={X(bar.x0)}
+                            y2={Y(bar.y - hook)}
+                            stroke={stroke}
+                            strokeWidth="1.6"
+                            opacity="0.95"
+                          />
+                          <line
+                            x1={X(bar.x1)}
+                            y1={Y(bar.y)}
+                            x2={X(bar.x1)}
+                            y2={Y(bar.y - hook)}
+                            stroke={stroke}
+                            strokeWidth="1.6"
+                            opacity="0.95"
+                          />
+                        </g>
+                      );
+                    }
+                    return (
+                      <g key={`rebar-y-${i}`} pointerEvents="none">
+                        <line
+                          x1={X(bar.x)}
+                          y1={Y(bar.y0)}
+                          x2={X(bar.x)}
+                          y2={Y(bar.y1)}
+                          stroke={stroke}
+                          strokeWidth="1.6"
+                          opacity="0.95"
+                        />
+                        <line
+                          x1={X(bar.x)}
+                          y1={Y(bar.y0)}
+                          x2={X(bar.x + hook)}
+                          y2={Y(bar.y0)}
+                          stroke={stroke}
+                          strokeWidth="1.6"
+                          opacity="0.95"
+                        />
+                        <line
+                          x1={X(bar.x)}
+                          y1={Y(bar.y1)}
+                          x2={X(bar.x + hook)}
+                          y2={Y(bar.y1)}
+                          stroke={stroke}
+                          strokeWidth="1.6"
+                          opacity="0.95"
+                        />
+                      </g>
+                    );
+                  })}
+                  {pressMarks.map((m, i) => (
+                    <g key={`press-${i}`} pointerEvents="none">
+                      {/* Ký hiệu nhấn tại thân dầm: tick ⊥ thanh + ghi độ nhấn */}
+                      {m.dir === "X" ? (
+                        <>
+                          <line
+                            x1={X(m.x)}
+                            y1={Y(m.y - tick)}
+                            x2={X(m.x)}
+                            y2={Y(m.y + tick)}
+                            stroke="#f59e0b"
+                            strokeWidth="1.4"
+                            opacity="0.95"
+                          />
+                          <line
+                            x1={X(m.x - tick * 0.35)}
+                            y1={Y(m.y + tick * 0.55)}
+                            x2={X(m.x)}
+                            y2={Y(m.y + tick)}
+                            stroke="#f59e0b"
+                            strokeWidth="1.4"
+                          />
+                          <line
+                            x1={X(m.x + tick * 0.35)}
+                            y1={Y(m.y + tick * 0.55)}
+                            x2={X(m.x)}
+                            y2={Y(m.y + tick)}
+                            stroke="#f59e0b"
+                            strokeWidth="1.4"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <line
+                            x1={X(m.x - tick)}
+                            y1={Y(m.y)}
+                            x2={X(m.x + tick)}
+                            y2={Y(m.y)}
+                            stroke="#f59e0b"
+                            strokeWidth="1.4"
+                            opacity="0.95"
+                          />
+                          <line
+                            x1={X(m.x + tick * 0.55)}
+                            y1={Y(m.y - tick * 0.35)}
+                            x2={X(m.x + tick)}
+                            y2={Y(m.y)}
+                            stroke="#f59e0b"
+                            strokeWidth="1.4"
+                          />
+                          <line
+                            x1={X(m.x + tick * 0.55)}
+                            y1={Y(m.y + tick * 0.35)}
+                            x2={X(m.x + tick)}
+                            y2={Y(m.y)}
+                            stroke="#f59e0b"
+                            strokeWidth="1.4"
+                          />
+                        </>
+                      )}
+                      <text
+                        x={X(m.x) + (m.dir === "X" ? 6 : 8)}
+                        y={Y(m.y) + (m.dir === "X" ? -6 : 3)}
+                        fill="#fbbf24"
+                        fontSize="9"
+                        fontWeight="600"
+                      >
+                        ↓{m.drop}
+                      </text>
                     </g>
-                  );
-                }
-                return (
-                  <g key={`rebar-y-${i}`} pointerEvents="none">
-                    <line
-                      x1={X(bar.x)}
-                      y1={Y(bar.y0)}
-                      x2={X(bar.x)}
-                      y2={Y(bar.y1)}
-                      stroke={stroke}
-                      strokeWidth="1.6"
-                      opacity="0.95"
-                    />
-                    <line
-                      x1={X(bar.x)}
-                      y1={Y(bar.y0)}
-                      x2={X(bar.x + hook)}
-                      y2={Y(bar.y0)}
-                      stroke={stroke}
-                      strokeWidth="1.6"
-                      opacity="0.95"
-                    />
-                    <line
-                      x1={X(bar.x)}
-                      y1={Y(bar.y1)}
-                      x2={X(bar.x + hook)}
-                      y2={Y(bar.y1)}
-                      stroke={stroke}
-                      strokeWidth="1.6"
-                      opacity="0.95"
-                    />
-                  </g>
-                );
-              });
+                  ))}
+                </>
+              );
             })()}
             <text x={W / 2} y={18} textAnchor="middle" fill="#79b8ff" fontSize="13" fontWeight="700">
               {project.info.name} · {Math.round(project.planWidth)}×{Math.round(project.planHeight)} ×{" "}

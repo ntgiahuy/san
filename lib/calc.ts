@@ -377,7 +377,11 @@ export function normalizeProject(raw: SlabProject): SlabProject {
     beams: raw.beams?.length ? raw.beams : base.beams,
     zones: raw.zones ?? base.zones,
     openings: raw.openings ?? [],
-    lowSlabs: raw.lowSlabs ?? [],
+    lowSlabs: (raw.lowSlabs ?? []).map((ls) => ({
+      ...ls,
+      drop: Number.isFinite(ls.drop) ? ls.drop : 200,
+      rebarMode: ls.rebarMode === "cut" ? "cut" : "press",
+    })),
     sections: raw.sections?.length ? raw.sections : base.sections,
     axesX,
     axesY,

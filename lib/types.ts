@@ -93,7 +93,15 @@ export interface LowSlab {
   w: number;
   h: number;
   drop: number;
+  /**
+   * Cách bố trí thép tại sàn thấp:
+   * - press (nhấn): thép chạy như sàn thường, nhấn xuống tại dầm quanh ô bằng `drop`
+   * - cut (cắt): cắt thép độc lập với sàn thường (như ô thủng)
+   */
+  rebarMode?: LowSlabRebarMode;
 }
+
+export type LowSlabRebarMode = "press" | "cut";
 
 /** Một vùng rải thép (shop). */
 export interface RebarZone {

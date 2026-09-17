@@ -208,12 +208,16 @@ export function bayRebarExtent(
   };
 }
 
-/** Hình chữ nhật cắt thép: chỉ ô thủng (mí da — nới thêm cover khi cắt). Sàn thấp bố trí thép như sàn thường. */
+/** Hình chữ nhật cắt thép: ô thủng + sàn thấp chế độ cắt (mí da — nới thêm cover khi cắt). */
 export function rebarCutRects(
   project: SlabProject,
 ): Array<{ x0: number; y0: number; x1: number; y1: number }> {
   const out: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
   for (const o of project.openings ?? []) {
+    out.push({ x0: o.x, y0: o.y, x1: o.x + o.w, y1: o.y + o.h });
+  }
+  for (const o of project.lowSlabs ?? []) {
+    if ((o.rebarMode ?? "press") !== "cut") continue;
     out.push({ x0: o.x, y0: o.y, x1: o.x + o.w, y1: o.y + o.h });
   }
   return out;
@@ -249,9 +253,8 @@ export type RebarBarSeg =
   | { dir: "Y"; y0: number; y1: number; x: number };
 
 /**
- * Thép ô sàn: từ da dầm biên trừ lớp BV; nếu gặp ô thủng thì cắt tại mí da.
- * Sàn thấp bố trí thép như sàn thường (chạy dầm bên này → dầm bên kia).
- * Mỗi ô: 1 cây phương X + 1 cây phương Y (có thể bị tách thành nhiều đoạn).
+ * Thép ô sàn: từ da dầm biên trừ lớp BV; cắt tại ô thủng / sàn thấp chế độ cắt.
+ * Sàn thấp nhấn: thép như sàn thường. Mỗi ô: 1 cây X + 1 cây Y (có thể tách đoạn).
  */
 export function bayRebarBarSegments(
   project: SlabProject,
@@ -294,7 +297,7 @@ export function bayKindAt(
   return "normal";
 }
 
-/** Ô còn bố trí thép sàn: sàn thường hoặc sàn thấp (không phải ô thủng). */
+/** Ô còn bố trí thép liên tục: sàn thường, hoặc sàn thấp chế độ nhấn (không cắt). */
 export function bayHasSlabRebar(
   project: SlabProject,
   axesX: GridAxis[],
@@ -302,13 +305,21 @@ export function bayHasSlabRebar(
   ix: number,
   iy: number,
 ): boolean {
-  return bayKindAt(project, axesX, axesY, ix, iy) !== "opening";
+  const kind = bayKindAt(project, axesX, axesY, ix, iy);
+  if (kind === "opening") return false;
+  if (kind === "low") {
+    const { x0, x1, y0, y1 } = baySlabExtent(project, axesX, axesY, ix, iy);
+    const ls = (project.lowSlabs ?? []).find((o) => rectNearlyEquals(o, x0, y0, x1, y1));
+    return (ls?.rebarMode ?? "press") !== "cut";
+  }
+  return true;
 }
 
 /**
- * Dầm độc lập: cả hai bên đều là ô thủng → không bố trí thép sàn trên thân dầm.
- * Sàn thấp coi như sàn thường (có thép). Dầm tiếp giáp ô thủng một bên vẫn có thép
- * trên thân dầm (cắt tại mí da ô thủng − lớp BV).
+ * Dầm độc lập: cả hai bên đều không còn thép sàn liên tục (ô thủng / sàn thấp cắt)
+ * → không bố trí thép trên thân dầm.
+ * Sàn thấp nhấn coi như sàn thường. Dầm tiếp giáp ô cắt một bên vẫn có thép
+ * trên thân dầm (cắt tại mí da − lớp BV).
  */
 export function independentBeamGaps(
   project: SlabProject,
@@ -440,9 +451,9 @@ export function expandCutsByCover(
 /**
  * Thép liên tục từ dầm biên đầu → dầm biên cuối:
  * điểm đầu/cuối = da dầm ngoài ± lớp bảo vệ (cover).
- * Cắt tại ô thủng: mép cắt = mí da ô thủng ± cover (thép còn trên thân dầm tiếp giáp).
- * Sàn thấp bố trí thép như sàn thường (chạy xuyên ô, dầm bên này → dầm bên kia).
- * Không bố trí thép trên dầm độc lập (cả hai bên đều là ô thủng).
+ * Cắt tại ô thủng / sàn thấp chế độ cắt: mép = mí da ± cover.
+ * Sàn thấp nhấn: thép chạy xuyên ô như sàn thường (nhấn tại dầm quanh ô).
+ * Không bố trí thép trên dầm độc lập (cả hai bên đều không có thép liên tục).
  */
 export function stripRebarBarSegments(
   project: SlabProject,
@@ -533,6 +544,97 @@ export function stripRebarBarSegments(
   }
 
   return out;
+}
+
+export type RebarPressMark = {
+  x: number;
+  y: number;
+  drop: number;
+  /** Phương thanh thép bị nhấn */
+  dir: "X" | "Y";
+};
+
+/**
+ * Điểm nhấn thép tại thân dầm quanh ô sàn thấp chế độ nhấn.
+ * Độ nhấn = chênh cao độ sàn thấp (`drop`).
+ */
+export function stripRebarPressMarks(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+): RebarPressMark[] {
+  const bars = stripRebarBarSegments(project, axesX, axesY);
+  const marks: RebarPressMark[] = [];
+  const eps = 1;
+
+  for (let iy = 0; iy < axesY.length - 1; iy++) {
+    for (let ix = 0; ix < axesX.length - 1; ix++) {
+      if (bayKindAt(project, axesX, axesY, ix, iy) !== "low") continue;
+      const slab = baySlabExtent(project, axesX, axesY, ix, iy);
+      const ls = (project.lowSlabs ?? []).find((o) =>
+        rectNearlyEquals(o, slab.x0, slab.y0, slab.x1, slab.y1),
+      );
+      if (!ls || (ls.rebarMode ?? "press") === "cut") continue;
+      const drop = Math.max(0, Math.round(Number(ls.drop) || Number(project.info.lowSlabDrop) || 0));
+      if (drop <= 0) continue;
+
+      const { x0, x1, y0, y1 } = slab;
+      type BeamGap = { lo: number; hi: number; along: "X" | "Y"; mid: number };
+      const beams: BeamGap[] = [];
+
+      if (ix > 0) {
+        const prev = baySlabExtent(project, axesX, axesY, ix - 1, iy);
+        if (x0 > prev.x1 + 0.5) beams.push({ lo: prev.x1, hi: x0, along: "X", mid: (prev.x1 + x0) / 2 });
+      } else {
+        const faces = beamOuterFaces(axesX[0].pos, beamSectionOnAxis(project, "Y", axesX[0]));
+        if (x0 > faces.lo + 0.5) beams.push({ lo: faces.lo, hi: x0, along: "X", mid: (faces.lo + x0) / 2 });
+      }
+      if (ix < axesX.length - 2) {
+        const next = baySlabExtent(project, axesX, axesY, ix + 1, iy);
+        if (next.x0 > x1 + 0.5) beams.push({ lo: x1, hi: next.x0, along: "X", mid: (x1 + next.x0) / 2 });
+      } else {
+        const ax = axesX[axesX.length - 1];
+        const faces = beamOuterFaces(ax.pos, beamSectionOnAxis(project, "Y", ax));
+        if (faces.hi > x1 + 0.5) beams.push({ lo: x1, hi: faces.hi, along: "X", mid: (x1 + faces.hi) / 2 });
+      }
+      if (iy > 0) {
+        const prev = baySlabExtent(project, axesX, axesY, ix, iy - 1);
+        if (y0 > prev.y1 + 0.5) beams.push({ lo: prev.y1, hi: y0, along: "Y", mid: (prev.y1 + y0) / 2 });
+      } else {
+        const faces = beamOuterFaces(axesY[0].pos, beamSectionOnAxis(project, "X", axesY[0]));
+        if (y0 > faces.lo + 0.5) beams.push({ lo: faces.lo, hi: y0, along: "Y", mid: (faces.lo + y0) / 2 });
+      }
+      if (iy < axesY.length - 2) {
+        const next = baySlabExtent(project, axesX, axesY, ix, iy + 1);
+        if (next.y0 > y1 + 0.5) beams.push({ lo: y1, hi: next.y0, along: "Y", mid: (y1 + next.y0) / 2 });
+      } else {
+        const ay = axesY[axesY.length - 1];
+        const faces = beamOuterFaces(ay.pos, beamSectionOnAxis(project, "X", ay));
+        if (faces.hi > y1 + 0.5) beams.push({ lo: y1, hi: faces.hi, along: "Y", mid: (y1 + faces.hi) / 2 });
+      }
+
+      for (const beam of beams) {
+        if (beam.along === "X") {
+          for (const bar of bars) {
+            if (bar.dir !== "X") continue;
+            if (bar.y < y0 - eps || bar.y > y1 + eps) continue;
+            if (bar.x0 < beam.mid && bar.x1 > beam.mid) {
+              marks.push({ x: beam.mid, y: bar.y, drop, dir: "X" });
+            }
+          }
+        } else {
+          for (const bar of bars) {
+            if (bar.dir !== "Y") continue;
+            if (bar.x < x0 - eps || bar.x > x1 + eps) continue;
+            if (bar.y0 < beam.mid && bar.y1 > beam.mid) {
+              marks.push({ x: bar.x, y: beam.mid, drop, dir: "Y" });
+            }
+          }
+        }
+      }
+    }
+  }
+  return marks;
 }
 
 /**

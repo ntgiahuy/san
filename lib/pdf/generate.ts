@@ -17,6 +17,7 @@ import {
   rectOpeningDiagonals,
   sortAxes,
   stripRebarBarSegments,
+  stripRebarPressMarks,
   SLAB_REBAR_HOOK_MM,
 } from "../grid";
 import type { PlanBeam, RebarZone, SlabProject } from "../types";
@@ -228,7 +229,15 @@ function drawPlan(
     for (const seg of rectDiagonalHatchSegments(x0, y0, x1, y1, 200)) {
       line(ctx, toX(seg.xA), toY(seg.yA), toX(seg.xB), toY(seg.yB), 0.45);
     }
-    textSimple(ctx, ls.name || "ST", toX((x0 + x1) / 2), toY((y0 + y1) / 2), 6, false, "center");
+    textSimple(
+      ctx,
+      `${ls.name || "ST"}${(ls.rebarMode ?? "press") === "cut" ? " · cắt" : " · nhấn"}`,
+      toX((x0 + x1) / 2),
+      toY((y0 + y1) / 2),
+      6,
+      false,
+      "center",
+    );
   }
 
   for (const o of project.openings ?? []) {
@@ -243,8 +252,9 @@ function drawPlan(
     textSimple(ctx, o.name || "Ô", toX((x0 + x1) / 2), toY((y0 + y1) / 2), 6, false, "center");
   }
 
-  // Thép từ da dầm ngoài biên ± lớp BV; liên tục qua dầm giữa; cắt tại ô thủng / sàn thấp
+  // Thép liên tục; cắt tại ô thủng / sàn thấp cắt; nhấn tại dầm quanh sàn thấp nhấn
   const hook = SLAB_REBAR_HOOK_MM;
+  const pressAmber = rgb(0.9, 0.55, 0.1);
   for (const bar of stripRebarBarSegments(project, axesX, axesY)) {
     if (bar.dir === "X") {
       line(ctx, toX(bar.x0), toY(bar.y), toX(bar.x1), toY(bar.y), 0.7, REBAR_RED);
@@ -255,6 +265,19 @@ function drawPlan(
       line(ctx, toX(bar.x), toY(bar.y0), toX(bar.x + hook), toY(bar.y0), 0.7, REBAR_RED);
       line(ctx, toX(bar.x), toY(bar.y1), toX(bar.x + hook), toY(bar.y1), 0.7, REBAR_RED);
     }
+  }
+  const tick = 70;
+  for (const m of stripRebarPressMarks(project, axesX, axesY)) {
+    if (m.dir === "X") {
+      line(ctx, toX(m.x), toY(m.y - tick), toX(m.x), toY(m.y + tick), 0.65, pressAmber);
+      line(ctx, toX(m.x - tick * 0.35), toY(m.y + tick * 0.55), toX(m.x), toY(m.y + tick), 0.65, pressAmber);
+      line(ctx, toX(m.x + tick * 0.35), toY(m.y + tick * 0.55), toX(m.x), toY(m.y + tick), 0.65, pressAmber);
+    } else {
+      line(ctx, toX(m.x - tick), toY(m.y), toX(m.x + tick), toY(m.y), 0.65, pressAmber);
+      line(ctx, toX(m.x + tick * 0.55), toY(m.y - tick * 0.35), toX(m.x + tick), toY(m.y), 0.65, pressAmber);
+      line(ctx, toX(m.x + tick * 0.55), toY(m.y + tick * 0.35), toX(m.x + tick), toY(m.y), 0.65, pressAmber);
+    }
+    textSimple(ctx, `↓${m.drop}`, toX(m.x) + 4, toY(m.y) - 4, 5.5, false, "left");
   }
 
   for (const z of zones) {

@@ -57,6 +57,7 @@ import {
   SPACING_OPTIONS,
   TABS,
   type LayoutPreset,
+  type LowSlabRebarMode,
   type PlanSelection,
   type RebarDir,
   type RebarLayer,
@@ -98,6 +99,8 @@ export function SlabApp() {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [planSelection, setPlanSelection] = useState<PlanSelection | null>(null);
   const [axisDirTab, setAxisDirTab] = useState<"X" | "Y">("X");
+  /** Chế độ thép khi đặt/sửa sàn thấp: nhấn | cắt */
+  const [lowRebarMode, setLowRebarMode] = useState<LowSlabRebarMode>("press");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedBeamPanelRef = useRef<HTMLDivElement>(null);
   const selectedBayPanelRef = useRef<HTMLDivElement>(null);
@@ -573,7 +576,7 @@ export function SlabApp() {
   }
 
   /** Đặt loại ô đang chọn: sàn thường / ô thủng / sàn thấp (sửa được nếu chèn nhầm). */
-  function setSelectedBayKind(kind: "normal" | "opening" | "low") {
+  function setSelectedBayKind(kind: "normal" | "opening" | "low", mode?: LowSlabRebarMode) {
     if (planSelection?.kind !== "bay") {
       setStatus("Chọn một ô sàn trên bản vẽ rồi chọn loại ô (thường / thủng / thấp).");
       setTab("draw");
@@ -588,6 +591,7 @@ export function SlabApp() {
     const h = Math.abs(y1 - y0);
     const bayName = `${xs[planSelection.ix]?.name}-${ys[planSelection.iy]?.name}`;
     const openings = (project.openings ?? []).filter((o) => !rectNearlyEquals(o, x0, y0, x1, y1));
+    const prevLow = (project.lowSlabs ?? []).find((o) => rectNearlyEquals(o, x0, y0, x1, y1));
     const lowSlabs = (project.lowSlabs ?? []).filter((o) => !rectNearlyEquals(o, x0, y0, x1, y1));
 
     if (kind === "normal") {
@@ -609,24 +613,45 @@ export function SlabApp() {
       setStatus(`Đã đặt ô ${bayName} thành ô thủng.`);
       return;
     }
+    const rebarMode = mode ?? lowRebarMode;
+    const drop = prevLow?.drop ?? project.info.lowSlabDrop ?? 0;
+    setLowRebarMode(rebarMode);
     persist({
       ...project,
       openings,
       lowSlabs: [
         ...lowSlabs,
         {
-          id: uid("low"),
-          name: `ST${lowSlabs.length + 1}`,
+          id: prevLow?.id ?? uid("low"),
+          name: prevLow?.name ?? `ST${lowSlabs.length + 1}`,
           x,
           y,
           w,
           h,
-          drop: project.info.lowSlabDrop,
+          drop,
+          rebarMode,
         },
       ],
     });
     setTab("draw");
-    setStatus(`Đã đặt ô ${bayName} thành sàn thấp (hạ ${project.info.lowSlabDrop ?? 0} mm).`);
+    const modeLabel = rebarMode === "cut" ? "cắt thép" : "nhấn thép";
+    setStatus(`Đã đặt ô ${bayName} thành sàn thấp (${modeLabel}, hạ ${drop} mm).`);
+  }
+
+  function selectedLowRebarMode(): LowSlabRebarMode {
+    if (planSelection?.kind !== "bay") return lowRebarMode;
+    const xs = sortAxes(project.axesX);
+    const ys = sortAxes(project.axesY);
+    const { x0, x1, y0, y1 } = baySlabExtent(project, xs, ys, planSelection.ix, planSelection.iy);
+    const ls = (project.lowSlabs ?? []).find((o) => rectNearlyEquals(o, x0, y0, x1, y1));
+    return ls?.rebarMode === "cut" ? "cut" : ls ? "press" : lowRebarMode;
+  }
+
+  function setSelectedLowRebarMode(mode: LowSlabRebarMode) {
+    setLowRebarMode(mode);
+    if (selectedBayKind() === "low") {
+      setSelectedBayKind("low", mode);
+    }
   }
 
   function insertOpening() {
@@ -634,7 +659,7 @@ export function SlabApp() {
   }
 
   function insertLowSlab() {
-    setSelectedBayKind("low");
+    setSelectedBayKind("low", lowRebarMode);
   }
 
   return (
@@ -1343,6 +1368,40 @@ export function SlabApp() {
                   Chọn ô sàn → chọn loại: <b className="text-zinc-400">Sàn thường</b> / <b className="text-zinc-400">Ô thủng</b> /{" "}
                   <b className="text-zinc-400">Sàn thấp</b> (đổi lại được nếu chèn nhầm).
                 </p>
+                <div className="mt-2 rounded border border-zinc-700/80 bg-zinc-950/50 p-2">
+                  <div className="mb-1.5 text-[11px] text-zinc-500">Thép sàn thấp</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        ["press", "Nhấn thép"],
+                        ["cut", "Cắt thép"],
+                      ] as const
+                    ).map(([mode, label]) => {
+                      const active = lowRebarMode === mode;
+                      return (
+                        <Button
+                          key={mode}
+                          size="sm"
+                          variant={active ? "default" : "secondary"}
+                          className={active ? "bg-amber-700 text-white hover:bg-amber-600" : undefined}
+                          onClick={() => setSelectedLowRebarMode(mode)}
+                          title={
+                            mode === "press"
+                              ? "Thép chạy như sàn thường; nhấn xuống tại dầm quanh ô bằng chênh cao độ"
+                              : "Cắt thép độc lập với sàn thường (giống ô thủng)"
+                          }
+                        >
+                          {label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1.5 text-[10px] leading-snug text-zinc-500">
+                    {lowRebarMode === "press"
+                      ? "Nhấn: thép đi thẳng xuyên ô; tại dầm quanh ô nhấn xuống bằng chênh cao độ sàn thấp."
+                      : "Cắt: thép cắt tại mí da ô sàn thấp (trừ lớp BV), tách với sàn thường."}
+                  </p>
+                </div>
               </Panel>
               <Panel title="Danh sách vùng thép" className="min-w-0 w-full">
                 <ul className="max-h-48 space-y-1 overflow-auto text-xs">
@@ -1402,6 +1461,32 @@ export function SlabApp() {
                         );
                       })}
                     </div>
+                    {selectedBayKind() === "low" && (
+                      <div className="mt-2">
+                        <div className="mb-1 text-[11px] text-zinc-500">Thép sàn thấp</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(
+                            [
+                              ["press", "Nhấn thép"],
+                              ["cut", "Cắt thép"],
+                            ] as const
+                          ).map(([mode, label]) => {
+                            const active = selectedLowRebarMode() === mode;
+                            return (
+                              <Button
+                                key={mode}
+                                size="sm"
+                                variant={active ? "default" : "secondary"}
+                                className={active ? "bg-amber-700 text-white hover:bg-amber-600" : undefined}
+                                onClick={() => setSelectedLowRebarMode(mode)}
+                              >
+                                {label}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2.5">
                     <Field label="Khoảng cách Lx" unit="mm">
