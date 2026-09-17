@@ -44,6 +44,7 @@ import {
   rectNearlyEquals,
   removeAxis,
   removeBeam,
+  removeBeamMergingAdjacentBays,
   removeBeamType,
   renameAxis,
   setAxisSpan,
@@ -266,6 +267,18 @@ export function SlabApp() {
   function patchSelectedBeamShift(patch: { shift?: number; s0?: number; s1?: number }) {
     if (planSelection?.kind !== "beam") return;
     persist(patchBeamSegShift(project, planSelection.beamId, planSelection.segIndex, patch));
+  }
+
+  /** Xóa dầm đang chọn; trục giữa → gộp 2 ô sàn kề hai bên. */
+  function deleteSelectedBeam() {
+    if (planSelection?.kind !== "beam") return;
+    const beam = project.beams.find((b) => b.id === planSelection.beamId);
+    if (!beam) return;
+    const name = beam.name || planSelection.beamId;
+    const next = removeBeamMergingAdjacentBays(project, planSelection.beamId);
+    clearPlanSelection();
+    persist(next);
+    setStatus(`Đã xóa dầm «${name}» — ô sàn hai bên đã gộp (nếu là trục giữa).`);
   }
 
 
@@ -1483,9 +1496,19 @@ export function SlabApp() {
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <div className="text-xs font-semibold text-sky-300">Dầm đang chọn</div>
-                      <Button size="sm" variant="secondary" onClick={clearPlanSelection}>
-                        Bỏ chọn
-                      </Button>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          title="Xóa dầm; ô sàn hai bên gộp thành một ô (trục giữa)"
+                          onClick={deleteSelectedBeam}
+                        >
+                          <Trash2 /> Xóa dầm
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={clearPlanSelection}>
+                          Bỏ chọn
+                        </Button>
+                      </div>
                     </div>
                     <p className="mb-2 text-[11px] text-zinc-400">{selectedBeamInfo()!.name}</p>
                     <div className="flex flex-col gap-2.5">

@@ -1818,6 +1818,123 @@ export function removeBeam(project: SlabProject, beamId: string): SlabProject {
   };
 }
 
+/**
+ * Gộp ô thủng / sàn thấp hai bên trục sắp xóa thành một ô (theo tim trục bị gỡ).
+ * beamDir = phương dầm: Y → gỡ trục X; X → gỡ trục Y.
+ */
+function mergeSpecialBaysAcrossAxis(
+  project: SlabProject,
+  beamDir: PlanBeam["direction"],
+  axisIndex: number,
+): { openings: SlabProject["openings"]; lowSlabs: SlabProject["lowSlabs"] } {
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+  let openings = [...(project.openings ?? [])];
+  let lowSlabs = [...(project.lowSlabs ?? [])];
+
+  const takeMerge = <T extends { id: string; x: number; y: number; w: number; h: number }>(
+    list: T[],
+    left: { x0: number; y0: number; x1: number; y1: number },
+    right: { x0: number; y0: number; x1: number; y1: number },
+    merged: { x: number; y: number; w: number; h: number },
+  ): T[] => {
+    const leftHit = list.find((o) => rectNearlyEquals(o, left.x0, left.y0, left.x1, left.y1));
+    const rightHit = list.find((o) => rectNearlyEquals(o, right.x0, right.y0, right.x1, right.y1));
+    if (!leftHit && !rightHit) return list;
+    const base = leftHit ?? rightHit!;
+    return [
+      ...list.filter((o) => o.id !== leftHit?.id && o.id !== rightHit?.id),
+      { ...base, ...merged },
+    ];
+  };
+
+  if (beamDir === "Y") {
+    // Dầm đứng: gộp trái–phải theo từng hàng ô
+    for (let iy = 0; iy < axesY.length - 1; iy++) {
+      const left = baySlabExtent(project, axesX, axesY, axisIndex - 1, iy);
+      const right = baySlabExtent(project, axesX, axesY, axisIndex, iy);
+      const y0 = Math.min(left.y0, right.y0);
+      const y1 = Math.max(left.y1, right.y1);
+      const merged = { x: left.x0, y: y0, w: right.x1 - left.x0, h: y1 - y0 };
+      openings = takeMerge(openings, left, right, merged);
+      lowSlabs = takeMerge(lowSlabs, left, right, merged);
+    }
+  } else {
+    // Dầm ngang: gộp dưới–trên theo từng cột ô
+    for (let ix = 0; ix < axesX.length - 1; ix++) {
+      const bottom = baySlabExtent(project, axesX, axesY, ix, axisIndex - 1);
+      const top = baySlabExtent(project, axesX, axesY, ix, axisIndex);
+      const x0 = Math.min(bottom.x0, top.x0);
+      const x1 = Math.max(bottom.x1, top.x1);
+      const merged = { x: x0, y: bottom.y0, w: x1 - x0, h: top.y1 - bottom.y0 };
+      openings = takeMerge(openings, bottom, top, merged);
+      lowSlabs = takeMerge(lowSlabs, bottom, top, merged);
+    }
+  }
+
+  return { openings, lowSlabs };
+}
+
+/**
+ * Xóa dầm đang chọn và gộp 2 ô sàn kề hai bên thành 1 ô
+ * (gỡ trục tim của dầm nếu là trục giữa; biên chỉ xóa dầm).
+ */
+export function removeBeamMergingAdjacentBays(
+  project: SlabProject,
+  beamId: string,
+): SlabProject {
+  const beam = (project.beams ?? []).find((b) => b.id === beamId);
+  if (!beam) return project;
+
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+  const axes = beam.direction === "Y" ? axesX : axesY;
+
+  let idx = axes.findIndex((a) => a.id === beam.axisId || Math.abs(a.pos - beam.axis) < 0.5);
+  if (idx < 0 && axes.length) {
+    idx = 0;
+    let best = Math.abs(axes[0].pos - beam.axis);
+    for (let i = 1; i < axes.length; i++) {
+      const d = Math.abs(axes[i].pos - beam.axis);
+      if (d < best) {
+        best = d;
+        idx = i;
+      }
+    }
+  }
+
+  // Biên hoặc còn ≤2 trục: không gộp ô — chỉ xóa dầm
+  if (idx <= 0 || idx >= axes.length - 1 || axes.length <= 2) {
+    return removeBeam(project, beamId);
+  }
+
+  const axisId = axes[idx].id;
+  const { openings, lowSlabs } = mergeSpecialBaysAcrossAxis(project, beam.direction, idx);
+  const beams = (project.beams ?? []).filter((b) => b.id !== beamId);
+  const nextAxes =
+    beam.direction === "Y"
+      ? { axesX: removeAxis(axesX, axisId), axesY }
+      : { axesX, axesY: removeAxis(axesY, axisId) };
+
+  // removeAxis giữ nguyên nếu còn <2 — đã chặn ở trên
+  const next: SlabProject = {
+    ...project,
+    ...nextAxes,
+    beams,
+    openings,
+    lowSlabs,
+  };
+  const synced = applyAxesToProject(next);
+  return {
+    ...synced,
+    info: syncBeamInfo({
+      ...synced.info,
+      beamCountX: synced.beams.filter((b) => b.direction === "Y").length,
+      beamCountY: synced.beams.filter((b) => b.direction === "X").length,
+    }),
+  };
+}
+
 /** Cập nhật một dầm theo id. */
 export function patchBeam(
   project: SlabProject,
