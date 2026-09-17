@@ -31,8 +31,6 @@ import {
   axisSpan,
   beamSegments,
   equalizeAxisSpans,
-  insertSlabBayX,
-  insertSlabBayY,
   patchBeam,
   patchBeamOnAxis,
   removeAxis,
@@ -652,16 +650,6 @@ export function SlabApp() {
     persist(applyAxesToProject({ ...project, axesY: nextAxes }));
   }
 
-  function addSlabBayX() {
-    persist(insertSlabBayX(project, 3000));
-    setStatus("Đã chèn thêm ô sàn theo phương X (trục mới).");
-  }
-
-  function addSlabBayY() {
-    persist(insertSlabBayY(project, 3000));
-    setStatus("Đã chèn thêm ô sàn theo phương Y (trục mới).");
-  }
-
   function insertOpening() {
     persist({
       ...project,
@@ -1037,9 +1025,6 @@ export function SlabApp() {
                         </div>
                       ))}
                     </div>
-                    <Button size="sm" variant="secondary" className="mt-2 w-full" onClick={addSlabBayX}>
-                      <Plus /> Thêm trục X (không thêm dầm)
-                    </Button>
                   </div>
                 ) : (
                   <div className="rounded border border-zinc-700 bg-zinc-950/60 p-2">
@@ -1080,9 +1065,6 @@ export function SlabApp() {
                         </div>
                       ))}
                     </div>
-                    <Button size="sm" variant="secondary" className="mt-2 w-full" onClick={addSlabBayY}>
-                      <Plus /> Thêm trục Y (không thêm dầm)
-                    </Button>
                   </div>
                 )}
               </Panel>
