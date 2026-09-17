@@ -10,6 +10,9 @@ import {
   beamDrawRange,
   beamSegments,
   planBeamBleed,
+  rectDiagonalHatchSegments,
+  rectNearlyEquals,
+  rectOpeningDiagonals,
   sortAxes,
   SLAB_REBAR_HOOK_MM,
 } from "@/lib/grid";
@@ -212,6 +215,98 @@ export function SlabPreview({
     }
   }
 
+  const lowSlabNodes: ReactNode[] = (project.lowSlabs ?? []).map((ls) => {
+    const x0 = ls.x;
+    const y0 = ls.y;
+    const x1 = ls.x + ls.w;
+    const y1 = ls.y + ls.h;
+    const segs = rectDiagonalHatchSegments(x0, y0, x1, y1, 200);
+    return (
+      <g key={`low-${ls.id}`} pointerEvents="none">
+        <rect
+          x={X(x0)}
+          y={Y(y1)}
+          width={ls.w * s}
+          height={ls.h * s}
+          fill="rgba(161,161,170,0.06)"
+          stroke="#a1a1aa"
+          strokeWidth={0.8}
+        />
+        {segs.map((seg, i) => (
+          <line
+            key={`low-hatch-${ls.id}-${i}`}
+            x1={X(seg.xA)}
+            y1={Y(seg.yA)}
+            x2={X(seg.xB)}
+            y2={Y(seg.yB)}
+            stroke="#c4c4c8"
+            strokeWidth={0.9}
+            opacity={0.95}
+          />
+        ))}
+        <text
+          x={X((x0 + x1) / 2)}
+          y={Y((y0 + y1) / 2) + 4}
+          textAnchor="middle"
+          fill="#d4d4d8"
+          fontSize="10"
+          fontWeight="600"
+        >
+          {ls.name || "ST"}
+        </text>
+      </g>
+    );
+  });
+
+  const openingNodes: ReactNode[] = (project.openings ?? []).map((op) => {
+    const x0 = op.x;
+    const y0 = op.y;
+    const x1 = op.x + op.w;
+    const y1 = op.y + op.h;
+    const [d1, d2] = rectOpeningDiagonals(x0, y0, x1, y1);
+    return (
+      <g key={`op-${op.id}`} pointerEvents="none">
+        <rect
+          x={X(x0)}
+          y={Y(y1)}
+          width={op.w * s}
+          height={op.h * s}
+          fill="rgba(24,24,27,0.55)"
+          stroke="#e4e4e7"
+          strokeWidth={1}
+        />
+        <line
+          x1={X(d1.xA)}
+          y1={Y(d1.yA)}
+          x2={X(d1.xB)}
+          y2={Y(d1.yB)}
+          stroke="#e4e4e7"
+          strokeWidth={1.2}
+          strokeDasharray="6 4"
+        />
+        <line
+          x1={X(d2.xA)}
+          y1={Y(d2.yA)}
+          x2={X(d2.xB)}
+          y2={Y(d2.yB)}
+          stroke="#e4e4e7"
+          strokeWidth={1.2}
+          strokeDasharray="6 4"
+        />
+        <text
+          x={X((x0 + x1) / 2)}
+          y={Y((y0 + y1) / 2) + 4}
+          textAnchor="middle"
+          fill="#fafafa"
+          fontSize="10"
+          fontWeight="700"
+        >
+          {op.name || "Ô"}
+        </text>
+      </g>
+    );
+  });
+
   const beamNodes: ReactNode[] = [];
   for (const beam of project.beams ?? []) {
     const { b: bw } = parseBeamSize(beam.size);
@@ -399,6 +494,8 @@ export function SlabPreview({
               pointerEvents="none"
             />
             {bayNodes}
+            {lowSlabNodes}
+            {openingNodes}
             {axesX.map((ax) => {
               const active = selection?.kind === "axis" && selection.dir === "X" && selection.axisId === ax.id;
               const cx = X(ax.pos);
@@ -506,6 +603,11 @@ export function SlabPreview({
             {beamNodes}
             {axesX.slice(0, -1).flatMap((_, ix) =>
               axesY.slice(0, -1).map((_, iy) => {
+                const extent = baySlabExtent(project, axesX, axesY, ix, iy);
+                const isOpening = (project.openings ?? []).some((o) =>
+                  rectNearlyEquals(o, extent.x0, extent.y0, extent.x1, extent.y1),
+                );
+                if (isOpening) return null;
                 const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
                 const hook = SLAB_REBAR_HOOK_MM;
                 const stroke = "#ef4444";

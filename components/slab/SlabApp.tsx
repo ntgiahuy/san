@@ -29,10 +29,12 @@ import {
   applyBeamCounts,
   applyBeamDimsToAll,
   axisSpan,
+  baySlabExtent,
   beamSegments,
   equalizeAxisSpans,
   patchBeam,
   patchBeamOnAxis,
+  rectNearlyEquals,
   removeAxis,
   removeBeam,
   renameAxis,
@@ -561,40 +563,74 @@ export function SlabApp() {
   }
 
   function insertOpening() {
+    if (planSelection?.kind !== "bay") {
+      setStatus("Chọn một ô sàn trên bản vẽ rồi bấm Chèn Ô thủng.");
+      setTab("draw");
+      return;
+    }
+    const xs = sortAxes(project.axesX);
+    const ys = sortAxes(project.axesY);
+    const { x0, x1, y0, y1 } = baySlabExtent(project, xs, ys, planSelection.ix, planSelection.iy);
+    const x = Math.min(x0, x1);
+    const y = Math.min(y0, y1);
+    const w = Math.abs(x1 - x0);
+    const h = Math.abs(y1 - y0);
+    const openings = (project.openings ?? []).filter((o) => !rectNearlyEquals(o, x0, y0, x1, y1));
+    const lowSlabs = (project.lowSlabs ?? []).filter((o) => !rectNearlyEquals(o, x0, y0, x1, y1));
     persist({
       ...project,
       openings: [
-        ...project.openings,
+        ...openings,
         {
           id: uid("op"),
-          name: `Ô${project.openings.length + 1}`,
-          x: project.planWidth / 2 - 400,
-          y: project.planHeight / 2 - 400,
-          w: 800,
-          h: 800,
+          name: `Ô${openings.length + 1}`,
+          x,
+          y,
+          w,
+          h,
         },
       ],
+      lowSlabs,
     });
-    setStatus("Đã chèn ô thủng.");
+    setTab("draw");
+    setStatus(`Đã chèn ô thủng tại ô ${xs[planSelection.ix]?.name}-${ys[planSelection.iy]?.name}.`);
   }
 
   function insertLowSlab() {
+    if (planSelection?.kind !== "bay") {
+      setStatus("Chọn một ô sàn trên bản vẽ rồi bấm Chèn Sàn thấp.");
+      setTab("draw");
+      return;
+    }
+    const xs = sortAxes(project.axesX);
+    const ys = sortAxes(project.axesY);
+    const { x0, x1, y0, y1 } = baySlabExtent(project, xs, ys, planSelection.ix, planSelection.iy);
+    const x = Math.min(x0, x1);
+    const y = Math.min(y0, y1);
+    const w = Math.abs(x1 - x0);
+    const h = Math.abs(y1 - y0);
+    const openings = (project.openings ?? []).filter((o) => !rectNearlyEquals(o, x0, y0, x1, y1));
+    const lowSlabs = (project.lowSlabs ?? []).filter((o) => !rectNearlyEquals(o, x0, y0, x1, y1));
     persist({
       ...project,
+      openings,
       lowSlabs: [
-        ...project.lowSlabs,
+        ...lowSlabs,
         {
           id: uid("low"),
-          name: `ST${project.lowSlabs.length + 1}`,
-          x: 200,
-          y: 200,
-          w: 1500,
-          h: 1500,
+          name: `ST${lowSlabs.length + 1}`,
+          x,
+          y,
+          w,
+          h,
           drop: project.info.lowSlabDrop,
         },
       ],
     });
-    setStatus("Đã chèn sàn thấp.");
+    setTab("draw");
+    setStatus(
+      `Đã chèn sàn thấp (hạ ${project.info.lowSlabDrop ?? 0} mm) tại ô ${xs[planSelection.ix]?.name}-${ys[planSelection.iy]?.name}.`,
+    );
   }
 
   return (
@@ -1273,16 +1309,19 @@ export function SlabApp() {
                   <Button size="sm" className="bg-amber-600 text-white hover:bg-amber-500" onClick={() => void exportPdf()}>
                     Vẽ thép sàn (PDF)
                   </Button>
-                  <Button size="sm" variant="secondary" onClick={insertOpening}>
+                  <Button size="sm" variant="secondary" onClick={insertOpening} title="Chọn ô sàn rồi chèn — đánh dấu X nét đứt">
                     Chèn Ô thủng
                   </Button>
-                  <Button size="sm" variant="secondary" onClick={insertLowSlab}>
+                  <Button size="sm" variant="secondary" onClick={insertLowSlab} title="Chọn ô sàn rồi chèn — gạch chéo sàn thấp">
                     Chèn Sàn thấp
                   </Button>
                   <Button size="sm" variant="secondary" className="text-amber-300" onClick={() => setStatus(`Thống kê: ${model.schedule.length} số hiệu · ${model.totalWeight.toFixed(1)} kg`)}>
                     Thống kê thép sàn
                   </Button>
                 </div>
+                <p className="mt-1.5 text-[11px] text-zinc-500">
+                  Chọn ô sàn trên bản vẽ rồi bấm Chèn Ô thủng (X nét đứt) hoặc Chèn Sàn thấp (gạch chéo).
+                </p>
               </Panel>
               <Panel title="Danh sách vùng thép" className="min-w-0 w-full">
                 <ul className="max-h-48 space-y-1 overflow-auto text-xs">

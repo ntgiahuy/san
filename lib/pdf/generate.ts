@@ -12,8 +12,12 @@ import {
   axisInteriorSegmentsX,
   axisInteriorSegmentsY,
   bayRebarExtent,
+  baySlabExtent,
   beamDrawRange,
   planBeamBleed,
+  rectDiagonalHatchSegments,
+  rectNearlyEquals,
+  rectOpeningDiagonals,
   sortAxes,
   SLAB_REBAR_HOOK_MM,
 } from "../grid";
@@ -49,12 +53,14 @@ function line(
   y2: number,
   w = 0.7,
   color = BLACK,
+  dashArray?: number[],
 ) {
   ctx.page.drawLine({
     start: { x: x1, y: ty(y1) },
     end: { x: x2, y: ty(y2) },
     thickness: w,
     color,
+    ...(dashArray ? { dashArray } : {}),
   });
 }
 
@@ -215,17 +221,39 @@ function drawPlan(
     drawBeam(ctx, b, toX, toY, s);
   }
 
-  for (const o of project.openings) {
-    const x = toX(o.x);
-    const y = toY(o.y + o.h);
-    rect(ctx, x, y, o.w * s, o.h * s, 0.7);
-    textSimple(ctx, o.name || "Ô", x + (o.w * s) / 2, y + (o.h * s) / 2, 6, false, "center");
+  for (const ls of project.lowSlabs ?? []) {
+    const x0 = ls.x;
+    const y0 = ls.y;
+    const x1 = ls.x + ls.w;
+    const y1 = ls.y + ls.h;
+    rect(ctx, toX(x0), toY(y1), ls.w * s, ls.h * s, 0.6);
+    for (const seg of rectDiagonalHatchSegments(x0, y0, x1, y1, 200)) {
+      line(ctx, toX(seg.xA), toY(seg.yA), toX(seg.xB), toY(seg.yB), 0.45);
+    }
+    textSimple(ctx, ls.name || "ST", toX((x0 + x1) / 2), toY((y0 + y1) / 2), 6, false, "center");
   }
 
-  // Mỗi ô sàn: 1 cây X + 1 cây Y qua tim ô; đỏ, móc 50mm hai đầu; không xuyên thân dầm
+  for (const o of project.openings ?? []) {
+    const x0 = o.x;
+    const y0 = o.y;
+    const x1 = o.x + o.w;
+    const y1 = o.y + o.h;
+    rect(ctx, toX(x0), toY(y1), o.w * s, o.h * s, 0.7);
+    const [d1, d2] = rectOpeningDiagonals(x0, y0, x1, y1);
+    line(ctx, toX(d1.xA), toY(d1.yA), toX(d1.xB), toY(d1.yB), 0.7, BLACK, [5, 3]);
+    line(ctx, toX(d2.xA), toY(d2.yA), toX(d2.xB), toY(d2.yB), 0.7, BLACK, [5, 3]);
+    textSimple(ctx, o.name || "Ô", toX((x0 + x1) / 2), toY((y0 + y1) / 2), 6, false, "center");
+  }
+
+  // Mỗi ô sàn: 1 cây X + 1 cây Y qua tim ô; đỏ, móc 50mm hai đầu; không xuyên thân dầm / ô thủng
   const hook = SLAB_REBAR_HOOK_MM;
   for (let ix = 0; ix < axesX.length - 1; ix++) {
     for (let iy = 0; iy < axesY.length - 1; iy++) {
+      const extent = baySlabExtent(project, axesX, axesY, ix, iy);
+      const isOpening = (project.openings ?? []).some((o) =>
+        rectNearlyEquals(o, extent.x0, extent.y0, extent.x1, extent.y1),
+      );
+      if (isOpening) continue;
       const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
       line(ctx, toX(x0), toY(my), toX(x1), toY(my), 0.7, REBAR_RED);
       line(ctx, toX(x0), toY(my), toX(x0), toY(my - hook), 0.7, REBAR_RED);

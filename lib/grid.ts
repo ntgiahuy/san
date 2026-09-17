@@ -315,6 +315,88 @@ export function baySlabExtent(
   };
 }
 
+/** Đoạn chéo trong hình chữ nhật (clip) theo hằng số x−y = c — nét sàn thấp /. */
+export function rectDiagonalHatchSegments(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  spacingMm = 220,
+): Array<{ xA: number; yA: number; xB: number; yB: number }> {
+  const loX = Math.min(x0, x1);
+  const hiX = Math.max(x0, x1);
+  const loY = Math.min(y0, y1);
+  const hiY = Math.max(y0, y1);
+  const w = hiX - loX;
+  const h = hiY - loY;
+  if (w < 1 || h < 1) return [];
+  const step = Math.max(40, spacingMm);
+  const out: Array<{ xA: number; yA: number; xB: number; yB: number }> = [];
+  // Đường x − y = c, hướng (1,1): góc dưới-trái → trên-phải trên bản vẽ
+  const cMin = loX - hiY;
+  const cMax = hiX - loY;
+  for (let c = cMin; c <= cMax + 0.5; c += step) {
+    // Giao với 4 cạnh
+    const pts: Array<{ x: number; y: number }> = [];
+    const push = (x: number, y: number) => {
+      if (x >= loX - 0.5 && x <= hiX + 0.5 && y >= loY - 0.5 && y <= hiY + 0.5) {
+        pts.push({ x: Math.min(hiX, Math.max(loX, x)), y: Math.min(hiY, Math.max(loY, y)) });
+      }
+    };
+    // cạnh trái x=loX → y = loX - c
+    push(loX, loX - c);
+    // cạnh phải x=hiX → y = hiX - c
+    push(hiX, hiX - c);
+    // cạnh dưới y=loY → x = c + loY
+    push(c + loY, loY);
+    // cạnh trên y=hiY → x = c + hiY
+    push(c + hiY, hiY);
+    // Khử trùng
+    const uniq: Array<{ x: number; y: number }> = [];
+    for (const p of pts) {
+      if (!uniq.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 0.5)) uniq.push(p);
+    }
+    if (uniq.length >= 2) {
+      out.push({ xA: uniq[0].x, yA: uniq[0].y, xB: uniq[1].x, yB: uniq[1].y });
+    }
+  }
+  return out;
+}
+
+/** Hai đường chéo góc ô — ký hiệu ô thủng. */
+export function rectOpeningDiagonals(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): [{ xA: number; yA: number; xB: number; yB: number }, { xA: number; yA: number; xB: number; yB: number }] {
+  const loX = Math.min(x0, x1);
+  const hiX = Math.max(x0, x1);
+  const loY = Math.min(y0, y1);
+  const hiY = Math.max(y0, y1);
+  return [
+    { xA: loX, yA: loY, xB: hiX, yB: hiY },
+    { xA: loX, yA: hiY, xB: hiX, yB: loY },
+  ];
+}
+
+/** Ô (ix,iy) có hình chữ nhật gần trùng với rect (mm). */
+export function rectNearlyEquals(
+  a: { x: number; y: number; w: number; h: number },
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  tol = 50,
+): boolean {
+  return (
+    Math.abs(a.x - Math.min(x0, x1)) < tol &&
+    Math.abs(a.y - Math.min(y0, y1)) < tol &&
+    Math.abs(a.w - Math.abs(x1 - x0)) < tol &&
+    Math.abs(a.h - Math.abs(y1 - y0)) < tol
+  );
+}
+
 /** Chiều dài móc thép sàn trên mặt bằng (mm). */
 export const SLAB_REBAR_HOOK_MM = 50;
 
