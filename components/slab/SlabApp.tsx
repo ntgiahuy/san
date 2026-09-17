@@ -481,6 +481,10 @@ export function SlabApp() {
     }
     persist(next);
     const added = next.beams.filter((b) => !(project.beams ?? []).some((o) => o.id === b.id));
+    if (added.length === 0) {
+      setStatus("Không chèn được — ô quá hẹp hoặc đã có trục. Thử ô khác / khoảng cách khác.");
+      return;
+    }
     const last = added[added.length - 1];
     if (last) {
       const segs = beamSegments(next, last);
