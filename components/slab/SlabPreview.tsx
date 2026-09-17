@@ -416,7 +416,7 @@ export function SlabPreview({
   const statusText = !interactive
     ? `${project.info.name} · ${project.beams.length} dầm · ${axesX.length - 1}×${axesY.length - 1} ô`
     : insertBeamMode
-      ? "Đang chèn dầm — click vào ô sàn (vùng giữa các dầm trên bản vẽ)."
+      ? "Đang chèn dầm — click ô sàn để thêm trục và tách ô độc lập (1 dầm → 2 ô; X+Y → 4 ô)."
       : !selection
       ? "Nhấp ô sàn, dầm hoặc số hiệu trục trên bản vẽ để chỉnh kích thước tại chỗ."
       : selection.kind === "bay"
