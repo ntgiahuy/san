@@ -114,34 +114,96 @@ export function patchBeamSegShift(
 }
 
 /**
+ * Áp dịch cho các đoạn đã chọn: `shift` = song song từng đoạn;
+ * `s0`/`s1` = cả dải đoạn (min→max index trên mỗi thanh) thành **một đường xéo thẳng**
+ * (nội suy tuyến tính theo tim trục), không phải mỗi đoạn tự s0/s1 riêng.
+ */
+export function patchBeamSelectedSegShiftsContinuous(
+  project: SlabProject,
+  selections: Array<{ beamId: string; segIndex: number }>,
+  patch: { shift?: number; s0?: number; s1?: number },
+): SlabProject {
+  if (selections.length === 0) return project;
+
+  // Nhóm chỉ số đoạn theo thanh
+  const byBeam = new Map<string, number[]>();
+  for (const s of selections) {
+    const list = byBeam.get(s.beamId) ?? [];
+    list.push(s.segIndex);
+    byBeam.set(s.beamId, list);
+  }
+
+  const beams = (project.beams ?? []).map((b) => {
+    const rawIdx = byBeam.get(b.id);
+    if (!rawIdx || rawIdx.length === 0) return b;
+    const segs = beamSegments(project, b);
+    if (segs.length === 0) return b;
+
+    const sorted = [...new Set(rawIdx.map((i) => Math.max(0, Math.floor(i))))].sort((a, c) => a - c);
+    const iMin = Math.max(0, sorted[0]);
+    const iMax = Math.min(segs.length - 1, sorted[sorted.length - 1]);
+    // Lấy cả dải liên tục giữa đoạn đầu–cuối đã chọn để khớp tại trục giữa
+    const from = iMin;
+    const to = iMax;
+    const n = Math.max(segs.length, to + 1, b.segShifts?.length ?? 0);
+    const next: BeamSegShift[] = Array.from({ length: n }, (_, i) => getBeamSegShift(b, i));
+
+    if (patch.shift !== undefined) {
+      const v = Math.round(Number(patch.shift) || 0);
+      for (let i = from; i <= to; i++) next[i] = { s0: v, s1: v };
+      return { ...b, segShifts: next };
+    }
+
+    const first = segs[from];
+    const last = segs[to];
+    if (!first || !last) return b;
+    const pos0 = first.a0.pos;
+    const pos1 = last.a1.pos;
+    const span = pos1 - pos0;
+    const startShift =
+      patch.s0 !== undefined ? Math.round(Number(patch.s0) || 0) : getBeamSegShift(b, from).s0;
+    const endShift =
+      patch.s1 !== undefined ? Math.round(Number(patch.s1) || 0) : getBeamSegShift(b, to).s1;
+
+    const lerpAt = (pos: number) => {
+      if (Math.abs(span) < 1e-6) return startShift;
+      const t = (pos - pos0) / span;
+      const u = Math.min(1, Math.max(0, t));
+      return Math.round(startShift + (endShift - startShift) * u);
+    };
+
+    for (let i = from; i <= to; i++) {
+      const seg = segs[i];
+      if (!seg) continue;
+      next[i] = { s0: lerpAt(seg.a0.pos), s1: lerpAt(seg.a1.pos) };
+    }
+    return { ...b, segShifts: next };
+  });
+
+  return { ...project, beams };
+}
+
+/**
  * Áp dịch cho mọi đoạn của một (hoặc nhiều) thanh dầm — dùng khi Shift chọn nhiều.
- * `shift` = song song cả thanh; `s0`/`s1` = cùng giá trị trên mọi đoạn.
+ * `shift` = song song cả thanh; `s0`/`s1` = một đường xéo thẳng suốt thanh (không từng đoạn riêng).
  */
 export function patchBeamAllSegShifts(
   project: SlabProject,
   beamIds: string | string[],
   patch: { shift?: number; s0?: number; s1?: number },
 ): SlabProject {
-  const ids = new Set(Array.isArray(beamIds) ? beamIds : [beamIds]);
-  if (ids.size === 0) return project;
-  const beams = (project.beams ?? []).map((b) => {
-    if (!ids.has(b.id)) return b;
-    const segs = beamSegments(project, b);
-    const n = Math.max(segs.length, 1, b.segShifts?.length ?? 0);
-    const next: BeamSegShift[] = Array.from({ length: n }, (_, i) => {
-      const cur = getBeamSegShift(b, i);
-      if (patch.shift !== undefined) {
-        const v = Math.round(Number(patch.shift) || 0);
-        return { s0: v, s1: v };
-      }
-      return {
-        s0: patch.s0 !== undefined ? Math.round(Number(patch.s0) || 0) : cur.s0,
-        s1: patch.s1 !== undefined ? Math.round(Number(patch.s1) || 0) : cur.s1,
-      };
-    });
-    return { ...b, segShifts: next };
-  });
-  return { ...project, beams };
+  const ids = Array.isArray(beamIds) ? beamIds : [beamIds];
+  if (ids.length === 0) return project;
+  const selections: Array<{ beamId: string; segIndex: number }> = [];
+  for (const id of ids) {
+    const beam = (project.beams ?? []).find((b) => b.id === id);
+    if (!beam) continue;
+    const segs = beamSegments(project, beam);
+    for (let i = 0; i < Math.max(segs.length, 1); i++) {
+      selections.push({ beamId: id, segIndex: i });
+    }
+  }
+  return patchBeamSelectedSegShiftsContinuous(project, selections, patch);
 }
 
 /**

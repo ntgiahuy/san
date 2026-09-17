@@ -56,6 +56,7 @@ import {
   syncBeamsToAxes,
   insertBeamInBay,
   patchBeamAllSegShifts,
+  patchBeamSelectedSegShiftsContinuous,
 } from "@/lib/grid";
 import { withBasePath } from "@/lib/base-path";
 import { downloadPdf, generateSlabPdf } from "@/lib/pdf/generate";
@@ -207,6 +208,22 @@ export function SlabApp() {
     if (!seg) return null;
     const parsed = parseBeamSize(beam.size);
     const shift = getBeamSegShift(beam, seg.index);
+
+    // Chọn nhiều đoạn cùng thanh → ô Dịch đầu/cuối = hai đầu dải đoạn (đường xéo liền)
+    const sameBeamSegs = beamMultiSelect
+      .filter((s) => s.beamId === beam.id)
+      .map((s) => s.segIndex)
+      .sort((a, c) => a - c);
+    const multiOnBeam = sameBeamSegs.length > 1;
+    let s0 = shift.s0;
+    let s1 = shift.s1;
+    if (multiOnBeam) {
+      const i0 = sameBeamSegs[0];
+      const i1 = sameBeamSegs[sameBeamSegs.length - 1];
+      s0 = getBeamSegShift(beam, i0).s0;
+      s1 = getBeamSegShift(beam, i1).s1;
+    }
+
     return {
       id: beam.id,
       name: `${beam.name} · ${seg.a0.name}–${seg.a1.name} · ${beam.direction === "Y" ? "đứng" : "ngang"}${beam.free ? " · giữa ô" : ""}`,
@@ -221,10 +238,11 @@ export function SlabApp() {
       H: parsed.h,
       B1: Number.isFinite(beam.offset) ? (beam.offset as number) : Math.round(parsed.b / 2),
       direction: beam.direction,
-      s0: shift.s0,
-      s1: shift.s1,
+      s0,
+      s1,
       /** Dịch song song khi hai đầu bằng nhau; nếu xéo lấy trung bình để hiển thị ô «Dịch đoạn». */
-      shift: shift.s0 === shift.s1 ? shift.s0 : Math.round((shift.s0 + shift.s1) / 2),
+      shift: s0 === s1 ? s0 : Math.round((s0 + s1) / 2),
+      multiOnBeam,
     };
   }
 
@@ -283,21 +301,30 @@ export function SlabApp() {
   }
 
   /** Dịch đoạn dầm: song song (shift) hoặc từng đầu (s0/s1 → dầm xéo).
-   * Shift/Ctrl chọn nhiều → áp cho cả thanh (mọi đoạn) của các dầm đã chọn. */
+   * Chọn nhiều đoạn → Dịch đầu/cuối = một đường xéo thẳng suốt dải đoạn đã chọn. */
   function patchSelectedBeamShift(patch: { shift?: number; s0?: number; s1?: number }) {
     if (planSelection?.kind !== "beam") return;
-    const multiIds = [...new Set(beamMultiSelect.map((s) => s.beamId))];
-    const applyWholeBeam = beamMultiSelect.length > 1 || multiIds.length > 1;
-    if (applyWholeBeam) {
-      const ids = multiIds.length > 0 ? multiIds : [planSelection.beamId];
-      persist(patchBeamAllSegShifts(project, ids, patch));
-      setStatus(
-        ids.length === 1
-          ? "Đã dịch cả thanh dầm đang chọn (mọi đoạn)."
-          : `Đã dịch ${ids.length} thanh dầm đang chọn (mọi đoạn mỗi thanh).`,
-      );
+    const multi =
+      beamMultiSelect.length > 0
+        ? beamMultiSelect
+        : [{ beamId: planSelection.beamId, segIndex: planSelection.segIndex }];
+    const multiIds = [...new Set(multi.map((s) => s.beamId))];
+
+    if (multi.length > 1) {
+      // Nhiều đoạn: đầu/cuối → đường xéo liền; shift → song song cả dải
+      persist(patchBeamSelectedSegShiftsContinuous(project, multi, patch));
+      if (patch.shift !== undefined) {
+        setStatus(
+          multiIds.length > 1
+            ? `Đã dịch song song ${multiIds.length} thanh / các đoạn đang chọn.`
+            : "Đã dịch song song các đoạn đang chọn.",
+        );
+      } else {
+        setStatus("Đã dịch đầu/cuối — các đoạn đã chọn thành một đường xéo thẳng liên tục.");
+      }
       return;
     }
+
     persist(patchBeamSegShift(project, planSelection.beamId, planSelection.segIndex, patch));
   }
 
@@ -1802,10 +1829,10 @@ export function SlabApp() {
                       </Field>
                       <p className="text-[10px] text-zinc-500">
                         {beamMultiSelect.length > 1
-                          ? "Đang chọn nhiều — dịch áp dụng cho cả thanh (mọi đoạn) của các dầm đã chọn."
+                          ? "Đang chọn nhiều — Dịch đầu/cuối tạo một đường xéo thẳng suốt các đoạn đã chọn (không lệch từng đoạn)."
                           : selectedBeamInfo()!.direction === "Y"
-                            ? "Dịch đoạn: song song trái/phải. Đầu ≠ cuối → dầm xéo. Shift chọn nhiều → cả thanh."
-                            : "Dịch đoạn: song song lên/xuống. Đầu ≠ cuối → dầm xéo. Shift chọn nhiều → cả thanh."}
+                            ? "Dịch đoạn: song song trái/phải. Đầu ≠ cuối → dầm xéo. Chọn nhiều đoạn → một đường xéo liền."
+                            : "Dịch đoạn: song song lên/xuống. Đầu ≠ cuối → dầm xéo. Chọn nhiều đoạn → một đường xéo liền."}
                       </p>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
