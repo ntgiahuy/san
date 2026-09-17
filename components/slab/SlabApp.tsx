@@ -29,6 +29,7 @@ import {
   applyBeamCounts,
   applyBeamDimsToAll,
   axisSpan,
+  beamSegments,
   equalizeAxisSpans,
   insertSlabBayX,
   insertSlabBayY,
@@ -168,14 +169,19 @@ export function SlabApp() {
     if (planSelection?.kind !== "beam") return null;
     const beam = project.beams.find((b) => b.id === planSelection.beamId);
     if (!beam) return null;
+    const segs = beamSegments(project, beam);
+    const seg = segs[planSelection.segIndex];
+    if (!seg) return null;
     const parsed = parseBeamSize(beam.size);
     return {
       id: beam.id,
-      name: `${beam.name} · ${beam.direction === "Y" ? "đứng" : "ngang"}`,
-      length: Math.abs(beam.end - beam.start),
+      name: `${beam.name} · ${seg.a0.name}–${seg.a1.name} · ${beam.direction === "Y" ? "đứng" : "ngang"}`,
+      length: seg.span,
       axis: beam.axis,
-      start: Math.min(beam.start, beam.end),
-      end: Math.max(beam.start, beam.end),
+      start: seg.lo,
+      end: seg.hi,
+      segIndex: seg.index,
+      spanAxisIndex: seg.spanAxisIndex,
       B: parsed.b,
       H: parsed.h,
       B1: Number.isFinite(beam.offset) ? (beam.offset as number) : Math.round(parsed.b / 2),
@@ -193,13 +199,17 @@ export function SlabApp() {
     }
   }
 
+  /** Đổi chiều dài đoạn dầm = đổi nhịp trục giữa hai đầu đoạn. */
   function patchSelectedBeamLength(value: number) {
     if (planSelection?.kind !== "beam") return;
+    const info = selectedBeamInfo();
+    if (!info) return;
     const v = Math.max(500, Math.round(value) || 500);
-    const beam = project.beams.find((b) => b.id === planSelection.beamId);
-    if (!beam) return;
-    const lo = Math.min(beam.start, beam.end);
-    persist(patchBeam(project, beam.id, { start: lo, end: lo + v }));
+    if (info.direction === "Y") {
+      persist(applyAxesToProject({ ...project, axesY: setAxisSpan(project.axesY, info.spanAxisIndex, v) }));
+    } else {
+      persist(applyAxesToProject({ ...project, axesX: setAxisSpan(project.axesX, info.spanAxisIndex, v) }));
+    }
   }
 
 
@@ -220,11 +230,34 @@ export function SlabApp() {
   }
 
 
-  /** Danh sách dầm theo thứ tự trái → phải. */
+  /** Danh sách đoạn dầm theo thứ tự trái → phải, dưới → trên. */
   function listBeamsLeftToRight(): PlanSelection[] {
-    return [...(project.beams ?? [])]
-      .sort((a, b) => a.axis - b.axis || a.name.localeCompare(b.name))
-      .map((b) => ({ kind: "beam" as const, beamId: b.id }));
+    type BeamSel = Extract<PlanSelection, { kind: "beam" }>;
+    const list: BeamSel[] = [];
+    const beams = [...(project.beams ?? [])].sort(
+      (a, b) => a.axis - b.axis || a.name.localeCompare(b.name),
+    );
+    for (const b of beams) {
+      const segs = beamSegments(project, b);
+      for (const seg of segs) {
+        list.push({ kind: "beam", beamId: b.id, segIndex: seg.index });
+      }
+    }
+    return list.sort((sa, sb) => {
+      const ba = project.beams.find((b) => b.id === sa.beamId)!;
+      const bb = project.beams.find((b) => b.id === sb.beamId)!;
+      const sega = beamSegments(project, ba)[sa.segIndex];
+      const segb = beamSegments(project, bb)[sb.segIndex];
+      if (!sega || !segb) return 0;
+      if (ba.direction === "Y" && bb.direction === "Y") {
+        return ba.axis - bb.axis || sega.lo - segb.lo;
+      }
+      if (ba.direction === "X" && bb.direction === "X") {
+        return sega.lo - segb.lo || ba.axis - bb.axis;
+      }
+      if (ba.direction !== bb.direction) return ba.direction === "Y" ? -1 : 1;
+      return 0;
+    });
   }
 
   /** Danh sách ô sàn theo thứ tự trái → phải, dưới → trên. */
@@ -244,7 +277,7 @@ export function SlabApp() {
     if (a.kind !== b.kind) return false;
     if (a.kind === "bay" && b.kind === "bay") return a.ix === b.ix && a.iy === b.iy;
     if (a.kind === "beam" && b.kind === "beam") {
-      return a.beamId === b.beamId;
+      return a.beamId === b.beamId && a.segIndex === b.segIndex;
     }
     if (a.kind === "axis" && b.kind === "axis") {
       return a.dir === b.dir && a.axisId === b.axisId;
@@ -1129,47 +1162,76 @@ export function SlabApp() {
                     {(project.beams ?? []).length === 0 && (
                       <p className="text-[11px] text-zinc-500">Chưa có dầm. Thêm dầm hoặc nhập số lượng ở trên.</p>
                     )}
-                    {(project.beams ?? []).map((b) => (
-                      <div
-                        key={b.id}
-                        className={`flex flex-wrap items-center gap-1.5 rounded border px-1.5 py-1 ${
-                          planSelection?.kind === "beam" && planSelection.beamId === b.id
-                            ? "border-emerald-600 bg-emerald-950/40"
-                            : "border-zinc-700"
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 text-left text-xs text-zinc-200 hover:text-sky-300"
-                          onClick={() => setPlanSelection({ kind: "beam", beamId: b.id })}
-                        >
-                          {b.name} · {b.direction === "Y" ? "đứng" : "ngang"} · tim={Math.round(b.axis)} · L=
-                          {Math.round(Math.abs(b.end - b.start))}
-                        </button>
-                        <Input
-                          type="number"
-                          className="w-20"
-                          title="Vị trí tim dầm (mm)"
-                          value={Math.round(b.axis)}
-                          onChange={(e) =>
-                            persist(patchBeam(project, b.id, { axis: Number(e.target.value) || 0 }))
-                          }
-                        />
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          className="px-1"
-                          onClick={() => {
-                            if (planSelection?.kind === "beam" && planSelection.beamId === b.id) {
-                              setPlanSelection(null);
-                            }
-                            persist(removeBeam(project, b.id));
-                          }}
-                        >
-                          <Trash2 />
-                        </Button>
-                      </div>
-                    ))}
+                    {(project.beams ?? []).flatMap((b) => {
+                      const segs = beamSegments(project, b);
+                      if (segs.length === 0) {
+                        return [
+                          <div
+                            key={b.id}
+                            className="flex flex-wrap items-center gap-1.5 rounded border border-zinc-700 px-1.5 py-1"
+                          >
+                            <span className="min-w-0 flex-1 text-xs text-zinc-400">
+                              {b.name} · {b.direction === "Y" ? "đứng" : "ngang"} · chưa có đoạn
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              className="px-1"
+                              onClick={() => persist(removeBeam(project, b.id))}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>,
+                        ];
+                      }
+                      return segs.map((seg) => {
+                        const selected =
+                          planSelection?.kind === "beam" &&
+                          planSelection.beamId === b.id &&
+                          planSelection.segIndex === seg.index;
+                        return (
+                          <div
+                            key={`${b.id}-s${seg.index}`}
+                            className={`flex flex-wrap items-center gap-1.5 rounded border px-1.5 py-1 ${
+                              selected ? "border-emerald-600 bg-emerald-950/40" : "border-zinc-700"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 text-left text-xs text-zinc-200 hover:text-sky-300"
+                              onClick={() =>
+                                setPlanSelection({ kind: "beam", beamId: b.id, segIndex: seg.index })
+                              }
+                            >
+                              {b.name} · {seg.a0.name}–{seg.a1.name} · {b.direction === "Y" ? "đứng" : "ngang"} · L=
+                              {Math.round(seg.span)}
+                            </button>
+                            <Input
+                              type="number"
+                              className="w-20"
+                              title="Vị trí tim dầm (mm)"
+                              value={Math.round(b.axis)}
+                              onChange={(e) =>
+                                persist(patchBeam(project, b.id, { axis: Number(e.target.value) || 0 }))
+                              }
+                            />
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              className="px-1"
+                              onClick={() => {
+                                if (planSelection?.kind === "beam" && planSelection.beamId === b.id) {
+                                  setPlanSelection(null);
+                                }
+                                persist(removeBeam(project, b.id));
+                              }}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        );
+                      });
+                    })}
                   </div>
                 </div>
                 {(planSelection?.kind === "bay" || planSelection?.kind === "beam") && (

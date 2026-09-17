@@ -764,6 +764,73 @@ export function beamDrawRange(
   return { lo, hi };
 }
 
+/** Một đoạn dầm giữa hai trục vuông góc liên tiếp. */
+export type BeamSegment = {
+  index: number;
+  /** Đầu / cuối vẽ (da dầm giao). */
+  lo: number;
+  hi: number;
+  /** Nhịp tim giữa hai trục (mm). */
+  span: number;
+  /** Chỉ số trục xa hơn trong mảng trục vuông góc (để setAxisSpan). */
+  spanAxisIndex: number;
+  a0: GridAxis;
+  a1: GridAxis;
+};
+
+/**
+ * Chia dầm thành các đoạn giữa các trục vuông góc nằm trên thanh.
+ * Chọn / tô sáng / sửa L theo từng đoạn, không lấy cả đầu→cuối.
+ */
+export function beamSegments(project: SlabProject, beam: PlanBeam): BeamSegment[] {
+  const bLo = Math.min(beam.start, beam.end);
+  const bHi = Math.max(beam.start, beam.end);
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+
+  if (beam.direction === "Y") {
+    const crosses = axesY
+      .map((a, fullIndex) => ({ a, fullIndex }))
+      .filter(({ a }) => a.pos >= bLo - 0.5 && a.pos <= bHi + 0.5);
+    const out: BeamSegment[] = [];
+    for (let i = 0; i < crosses.length - 1; i++) {
+      const a0 = crosses[i].a;
+      const a1 = crosses[i + 1].a;
+      const { yLo, yHi } = verticalBeamSegExtent(project, a0.pos, a1.pos, axesY);
+      out.push({
+        index: i,
+        lo: yLo,
+        hi: yHi,
+        span: a1.pos - a0.pos,
+        spanAxisIndex: crosses[i + 1].fullIndex,
+        a0,
+        a1,
+      });
+    }
+    return out;
+  }
+
+  const crosses = axesX
+    .map((a, fullIndex) => ({ a, fullIndex }))
+    .filter(({ a }) => a.pos >= bLo - 0.5 && a.pos <= bHi + 0.5);
+  const out: BeamSegment[] = [];
+  for (let i = 0; i < crosses.length - 1; i++) {
+    const a0 = crosses[i].a;
+    const a1 = crosses[i + 1].a;
+    const { xLo, xHi } = horizontalBeamSegExtent(project, a0.pos, a1.pos, axesX);
+    out.push({
+      index: i,
+      lo: xLo,
+      hi: xHi,
+      span: a1.pos - a0.pos,
+      spanAxisIndex: crosses[i + 1].fullIndex,
+      a0,
+      a1,
+    });
+  }
+  return out;
+}
+
 /** Thêm một dầm theo phương (không thêm trục). */
 export function addBeam(
   project: SlabProject,

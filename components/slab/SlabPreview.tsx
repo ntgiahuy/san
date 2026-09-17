@@ -8,6 +8,7 @@ import {
   bayRebarExtent,
   baySlabExtent,
   beamDrawRange,
+  beamSegments,
   planBeamBleed,
   sortAxes,
   SLAB_REBAR_HOOK_MM,
@@ -88,11 +89,13 @@ export function SlabPreview({
     if (sel.kind === "beam") {
       const beam = project.beams.find((b) => b.id === sel.beamId);
       if (!beam) return { leftPct: 50, topPct: 40 };
-      const { lo, hi } = beamDrawRange(project, beam);
+      const segs = beamSegments(project, beam);
+      const seg = segs[sel.segIndex] ?? segs[0];
+      if (!seg) return { leftPct: 50, topPct: 40 };
       if (beam.direction === "Y") {
-        return anchorFromSvg(X(beam.axis) + 28, Y((lo + hi) / 2));
+        return anchorFromSvg(X(beam.axis) + 28, Y((seg.lo + seg.hi) / 2));
       }
-      return anchorFromSvg(X((lo + hi) / 2), Y(beam.axis) - 28);
+      return anchorFromSvg(X((seg.lo + seg.hi) / 2), Y(beam.axis) - 28);
     }
     const axes = sel.dir === "X" ? axesX : axesY;
     const ax = axes.find((a) => a.id === sel.axisId);
@@ -126,7 +129,7 @@ export function SlabPreview({
     setAnchor((prev) => prev ?? anchorFromSelection(selection));
     // Chỉ neo lại khi đổi đối tượng chọn (không theo mọi frame geometry).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection?.kind, selection && "beamId" in selection ? selection.beamId : null, selection && "axisId" in selection ? selection.axisId : null, selection && "ix" in selection ? selection.ix : null, selection && "iy" in selection ? selection.iy : null]);
+  }, [selection?.kind, selection && "beamId" in selection ? selection.beamId : null, selection && "segIndex" in selection ? selection.segIndex : null, selection && "axisId" in selection ? selection.axisId : null, selection && "ix" in selection ? selection.ix : null, selection && "iy" in selection ? selection.iy : null]);
 
   if (show3d) {
     return (
@@ -213,98 +216,144 @@ export function SlabPreview({
   for (const beam of project.beams ?? []) {
     const { b: bw } = parseBeamSize(beam.size);
     const b1 = Number.isFinite(beam.offset) ? (beam.offset as number) : bw / 2;
-    const { lo, hi } = beamDrawRange(project, beam);
-    const active = selection?.kind === "beam" && selection.beamId === beam.id;
+    const segs = beamSegments(project, beam);
+    const full = beamDrawRange(project, beam);
+
+    // Thân dầm liên tục (không tô cả thanh khi chọn — chỉ tô đoạn)
     if (beam.direction === "Y") {
       beamNodes.push(
-        <g key={beam.id}>
-          <rect
-            x={X(beam.axis) - Math.max(b1, bw / 2) * s - 10}
-            y={Y(hi)}
-            width={Math.max(bw * s, 18) + 20}
-            height={(hi - lo) * s}
-            fill="transparent"
-            className={interactive ? "cursor-pointer" : undefined}
-            pointerEvents={interactive ? "all" : "none"}
-            onClick={(e) => {
-              if (!interactive || !onSelect) return;
-              e.stopPropagation();
-              pick({ kind: "beam", beamId: beam.id }, e);
-            }}
-          />
+        <g key={`${beam.id}-body`}>
           <rect
             x={X(beam.axis) - b1 * s}
-            y={Y(hi)}
+            y={Y(full.hi)}
             width={bw * s}
-            height={(hi - lo) * s}
-            fill={active ? "rgba(52,211,153,0.45)" : "#27272a"}
-            stroke={active ? "#34d399" : "#a1a1aa"}
-            strokeWidth={active ? 2 : 1}
+            height={(full.hi - full.lo) * s}
+            fill="#27272a"
+            stroke="#a1a1aa"
+            strokeWidth={1}
             pointerEvents="none"
           />
-          {active && (() => {
-            const tx = X(beam.axis) + (bw - b1) * s + 10;
-            const ty = Y((lo + hi) / 2);
-            return (
-              <text
-                x={tx}
-                y={ty}
-                fill="#6ee7b7"
-                fontSize="10"
-                fontWeight="700"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                transform={`rotate(-90 ${tx} ${ty})`}
-                pointerEvents="none"
-              >
-                {beam.name} · L={Math.round(Math.abs(beam.end - beam.start))}
-              </text>
-            );
-          })()}
         </g>,
       );
     } else {
       beamNodes.push(
-        <g key={beam.id}>
+        <g key={`${beam.id}-body`}>
           <rect
-            x={X(lo)}
-            y={Y(beam.axis + (bw - b1)) - 10}
-            width={(hi - lo) * s}
-            height={Math.max(bw * s, 18) + 20}
-            fill="transparent"
-            className={interactive ? "cursor-pointer" : undefined}
-            pointerEvents={interactive ? "all" : "none"}
-            onClick={(e) => {
-              if (!interactive || !onSelect) return;
-              e.stopPropagation();
-              pick({ kind: "beam", beamId: beam.id }, e);
-            }}
-          />
-          <rect
-            x={X(lo)}
+            x={X(full.lo)}
             y={Y(beam.axis + (bw - b1))}
-            width={(hi - lo) * s}
+            width={(full.hi - full.lo) * s}
             height={bw * s}
-            fill={active ? "rgba(52,211,153,0.45)" : "#27272a"}
-            stroke={active ? "#34d399" : "#a1a1aa"}
-            strokeWidth={active ? 2 : 1}
+            fill="#27272a"
+            stroke="#a1a1aa"
+            strokeWidth={1}
             pointerEvents="none"
           />
-          {active && (
-            <text
-              x={X((lo + hi) / 2)}
-              y={Y(beam.axis + (bw - b1)) - 6}
-              textAnchor="middle"
-              fill="#6ee7b7"
-              fontSize="10"
-              fontWeight="700"
-              pointerEvents="none"
-            >
-              {beam.name} · L={Math.round(Math.abs(beam.end - beam.start))}
-            </text>
-          )}
         </g>,
       );
+    }
+
+    for (const seg of segs) {
+      const active =
+        selection?.kind === "beam" && selection.beamId === beam.id && selection.segIndex === seg.index;
+      const lo = seg.lo;
+      const hi = seg.hi;
+      if (beam.direction === "Y") {
+        beamNodes.push(
+          <g key={`${beam.id}-s${seg.index}`}>
+            <rect
+              x={X(beam.axis) - Math.max(b1, bw / 2) * s - 10}
+              y={Y(hi)}
+              width={Math.max(bw * s, 18) + 20}
+              height={(hi - lo) * s}
+              fill="transparent"
+              className={interactive ? "cursor-pointer" : undefined}
+              pointerEvents={interactive ? "all" : "none"}
+              onClick={(e) => {
+                if (!interactive || !onSelect) return;
+                e.stopPropagation();
+                pick({ kind: "beam", beamId: beam.id, segIndex: seg.index }, e);
+              }}
+            />
+            {active && (
+              <>
+                <rect
+                  x={X(beam.axis) - b1 * s}
+                  y={Y(hi)}
+                  width={bw * s}
+                  height={(hi - lo) * s}
+                  fill="rgba(52,211,153,0.45)"
+                  stroke="#34d399"
+                  strokeWidth={2}
+                  pointerEvents="none"
+                />
+                {(() => {
+                  const tx = X(beam.axis) + (bw - b1) * s + 10;
+                  const ty = Y((lo + hi) / 2);
+                  return (
+                    <text
+                      x={tx}
+                      y={ty}
+                      fill="#6ee7b7"
+                      fontSize="10"
+                      fontWeight="700"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      transform={`rotate(-90 ${tx} ${ty})`}
+                      pointerEvents="none"
+                    >
+                      {beam.name} · {seg.a0.name}-{seg.a1.name} · L={Math.round(seg.span)}
+                    </text>
+                  );
+                })()}
+              </>
+            )}
+          </g>,
+        );
+      } else {
+        beamNodes.push(
+          <g key={`${beam.id}-s${seg.index}`}>
+            <rect
+              x={X(lo)}
+              y={Y(beam.axis + (bw - b1)) - 10}
+              width={(hi - lo) * s}
+              height={Math.max(bw * s, 18) + 20}
+              fill="transparent"
+              className={interactive ? "cursor-pointer" : undefined}
+              pointerEvents={interactive ? "all" : "none"}
+              onClick={(e) => {
+                if (!interactive || !onSelect) return;
+                e.stopPropagation();
+                pick({ kind: "beam", beamId: beam.id, segIndex: seg.index }, e);
+              }}
+            />
+            {active && (
+              <>
+                <rect
+                  x={X(lo)}
+                  y={Y(beam.axis + (bw - b1))}
+                  width={(hi - lo) * s}
+                  height={bw * s}
+                  fill="rgba(52,211,153,0.45)"
+                  stroke="#34d399"
+                  strokeWidth={2}
+                  pointerEvents="none"
+                />
+                <text
+                  x={X((lo + hi) / 2)}
+                  y={Y(beam.axis + (bw - b1)) - 6}
+                  textAnchor="middle"
+                  fill="#6ee7b7"
+                  fontSize="10"
+                  fontWeight="700"
+                  pointerEvents="none"
+                >
+                  {beam.name} · {seg.a0.name}-{seg.a1.name} · L={Math.round(seg.span)}
+                </text>
+              </>
+            )}
+          </g>,
+        );
+      }
     }
   }
 
@@ -315,7 +364,14 @@ export function SlabPreview({
       : selection.kind === "bay"
         ? `Ô sàn: ${axesX[selection.ix]?.name ?? "?"}–${axesX[selection.ix + 1]?.name ?? "?"} / ${axesY[selection.iy]?.name ?? "?"}–${axesY[selection.iy + 1]?.name ?? "?"}`
         : selection.kind === "beam"
-          ? `Dầm đang chọn: ${project.beams.find((b) => b.id === selection.beamId)?.name ?? selection.beamId}`
+          ? (() => {
+              const beam = project.beams.find((b) => b.id === selection.beamId);
+              if (!beam) return `Đoạn dầm: ${selection.beamId}`;
+              const seg = beamSegments(project, beam)[selection.segIndex];
+              return seg
+                ? `Đoạn dầm: ${beam.name} · ${seg.a0.name}–${seg.a1.name}`
+                : `Đoạn dầm: ${beam.name}`;
+            })()
           : `Trục ${selection.dir}: ${
               (selection.dir === "X" ? axesX : axesY).find((a) => a.id === selection.axisId)?.name ?? "?"
             }`;
