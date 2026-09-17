@@ -96,7 +96,6 @@ export function SlabApp() {
   const [planSelection, setPlanSelection] = useState<PlanSelection | null>(null);
   const [axisDirTab, setAxisDirTab] = useState<"X" | "Y">("X");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const sidePanelRef = useRef<HTMLDivElement>(null);
   const selectedBeamPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -671,7 +670,7 @@ export function SlabApp() {
       </nav>
 
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(140px,32vh)_minmax(0,1fr)] lg:grid-rows-1 lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
-        <div ref={sidePanelRef} className="min-h-0 overflow-auto border-b border-zinc-800 bg-zinc-900 p-3 lg:border-b-0 lg:border-r">
+        <div className="min-h-0 overflow-auto border-b border-zinc-800 bg-zinc-900 p-3 lg:border-b-0 lg:border-r">
           {tab === "plan" && (
             <div className="flex flex-col gap-3">
               <Panel title="1. Thông tin sàn" className="min-w-0 w-full">
