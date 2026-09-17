@@ -55,6 +55,7 @@ import {
   syncBeamInfo,
   syncBeamsToAxes,
   insertBeamInBay,
+  patchBeamAllSegShifts,
 } from "@/lib/grid";
 import { withBasePath } from "@/lib/base-path";
 import { downloadPdf, generateSlabPdf } from "@/lib/pdf/generate";
@@ -281,9 +282,22 @@ export function SlabApp() {
     }
   }
 
-  /** Dịch đoạn dầm: song song (shift) hoặc từng đầu (s0/s1 → dầm xéo). */
+  /** Dịch đoạn dầm: song song (shift) hoặc từng đầu (s0/s1 → dầm xéo).
+   * Shift/Ctrl chọn nhiều → áp cho cả thanh (mọi đoạn) của các dầm đã chọn. */
   function patchSelectedBeamShift(patch: { shift?: number; s0?: number; s1?: number }) {
     if (planSelection?.kind !== "beam") return;
+    const multiIds = [...new Set(beamMultiSelect.map((s) => s.beamId))];
+    const applyWholeBeam = beamMultiSelect.length > 1 || multiIds.length > 1;
+    if (applyWholeBeam) {
+      const ids = multiIds.length > 0 ? multiIds : [planSelection.beamId];
+      persist(patchBeamAllSegShifts(project, ids, patch));
+      setStatus(
+        ids.length === 1
+          ? "Đã dịch cả thanh dầm đang chọn (mọi đoạn)."
+          : `Đã dịch ${ids.length} thanh dầm đang chọn (mọi đoạn mỗi thanh).`,
+      );
+      return;
+    }
     persist(patchBeamSegShift(project, planSelection.beamId, planSelection.segIndex, patch));
   }
 
@@ -688,7 +702,7 @@ export function SlabApp() {
     const typeFromList = selectedTypes[0];
     const name = (bulkBeamName.trim() || typeFromList?.name || "").trim();
     if (!name) {
-      setStatus("Nhập tên hoặc chọn loại dầm trên danh sách, rồi chọn đoạn trên bản vẽ (Ctrl/Shift).");
+      setStatus("Nhập tên hoặc chọn loại dầm trên danh sách, rồi click đoạn trên bản vẽ (Shift/Ctrl nếu chọn nhiều).");
       return;
     }
     const targetBeamIds =
@@ -698,7 +712,7 @@ export function SlabApp() {
           ? [planSelection.beamId]
           : [];
     if (targetBeamIds.length === 0) {
-      setStatus("Chọn đoạn dầm trên bản vẽ (Ctrl/Shift) để gán tên.");
+      setStatus("Click đoạn dầm trên bản vẽ để gán tên (Shift/Ctrl chọn nhiều).");
       return;
     }
     const size = typeFromList?.size || `${project.info.beamB}x${project.info.beamH}`;
@@ -1473,7 +1487,7 @@ export function SlabApp() {
                     <div className="text-xs font-semibold text-sky-300">Danh sách dầm</div>
                   </div>
                   <p className="mb-1.5 text-[10px] text-zinc-500">
-                    Mỗi dòng: tên · H · B. Shift/Ctrl chọn; Gán tên đoạn trên bản vẽ; hoặc Chèn dầm vào giữa ô (Phương X/Y).
+                    Mỗi dòng: tên · H · B. Click đoạn để gán tên; Shift/Ctrl chọn nhiều; hoặc Chèn dầm vào giữa ô (Phương X/Y).
                   </p>
                   <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_2rem] items-center gap-1.5 px-1.5 text-[10px] text-zinc-500">
                     <span>Tên dầm</span>
@@ -1645,7 +1659,7 @@ export function SlabApp() {
                         {" · "}
                         {insertBeamMode
                           ? "Đang chèn — click ô sàn (không thêm trục). Tick Phương X/Y; khoảng cách trục trước khi chèn hoặc sửa Tim sau."
-                          : "Chọn đoạn trên bản vẽ (Ctrl/Shift) rồi Gán tên — hoặc Chèn dầm vào giữa ô (không thêm trục)."}
+                          : "Click đoạn rồi Gán tên (Shift/Ctrl chọn nhiều) — hoặc Chèn dầm vào giữa ô (không thêm trục)."}
                       </p>
                     </div>
                   )}
@@ -1791,9 +1805,11 @@ export function SlabApp() {
                         />
                       </Field>
                       <p className="text-[10px] text-zinc-500">
-                        {selectedBeamInfo()!.direction === "Y"
-                          ? "Dịch đoạn: song song trái/phải. Đầu ≠ cuối → dầm xéo."
-                          : "Dịch đoạn: song song lên/xuống. Đầu ≠ cuối → dầm xéo."}
+                        {beamMultiSelect.length > 1
+                          ? "Đang chọn nhiều — dịch áp dụng cho cả thanh (mọi đoạn) của các dầm đã chọn."
+                          : selectedBeamInfo()!.direction === "Y"
+                            ? "Dịch đoạn: song song trái/phải. Đầu ≠ cuối → dầm xéo. Shift chọn nhiều → cả thanh."
+                            : "Dịch đoạn: song song lên/xuống. Đầu ≠ cuối → dầm xéo. Shift chọn nhiều → cả thanh."}
                       </p>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">

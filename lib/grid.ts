@@ -114,6 +114,37 @@ export function patchBeamSegShift(
 }
 
 /**
+ * Áp dịch cho mọi đoạn của một (hoặc nhiều) thanh dầm — dùng khi Shift chọn nhiều.
+ * `shift` = song song cả thanh; `s0`/`s1` = cùng giá trị trên mọi đoạn.
+ */
+export function patchBeamAllSegShifts(
+  project: SlabProject,
+  beamIds: string | string[],
+  patch: { shift?: number; s0?: number; s1?: number },
+): SlabProject {
+  const ids = new Set(Array.isArray(beamIds) ? beamIds : [beamIds]);
+  if (ids.size === 0) return project;
+  const beams = (project.beams ?? []).map((b) => {
+    if (!ids.has(b.id)) return b;
+    const segs = beamSegments(project, b);
+    const n = Math.max(segs.length, 1, b.segShifts?.length ?? 0);
+    const next: BeamSegShift[] = Array.from({ length: n }, (_, i) => {
+      const cur = getBeamSegShift(b, i);
+      if (patch.shift !== undefined) {
+        const v = Math.round(Number(patch.shift) || 0);
+        return { s0: v, s1: v };
+      }
+      return {
+        s0: patch.s0 !== undefined ? Math.round(Number(patch.s0) || 0) : cur.s0,
+        s1: patch.s1 !== undefined ? Math.round(Number(patch.s1) || 0) : cur.s1,
+      };
+    });
+    return { ...b, segShifts: next };
+  });
+  return { ...project, beams };
+}
+
+/**
  * B1 theo vị trí trục trên lưới:
  * - biên đầu: tim = da ngoài lo (B1 = 0)
  * - biên cuối: tim = da ngoài hi (B1 = B)
