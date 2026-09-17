@@ -1156,7 +1156,7 @@ export function SlabApp() {
         <div className="min-h-0 overflow-auto border-b border-zinc-800 bg-zinc-900 p-3 lg:border-b-0 lg:border-r">
           {tab === "plan" && (
             <div className="flex flex-col gap-3">
-              <Panel title="1. Thông tin sàn" className="min-w-0 w-full">
+              <Panel title="Thông tin sàn" className="min-w-0 w-full">
                 <div className="flex flex-col gap-2.5">
                   <Field label="Tên sàn" wide>
                     <Input value={project.info.name} onChange={(e) => patchInfo({ name: e.target.value })} />
@@ -1243,8 +1243,8 @@ export function SlabApp() {
 
                 <div className="mt-3 border-t border-zinc-700 pt-3">
                   <div className="mb-1.5 text-[11px] text-zinc-500">
-                    Nhấp ô sàn trên bản vẽ để mở <b className="text-sky-300">4. Vẽ thép sàn</b>; nhấp đoạn dầm để mở{" "}
-                    <b className="text-emerald-400">3. Số liệu dầm</b>.
+                    Nhấp ô sàn trên bản vẽ để mở <b className="text-sky-300">Vẽ thép sàn</b>; nhấp đoạn dầm để mở{" "}
+                    <b className="text-emerald-400">Số liệu dầm</b>.
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
@@ -1271,7 +1271,7 @@ export function SlabApp() {
 
           {tab === "axes" && (
             <div className="flex flex-col gap-3">
-              <Panel title="2. Số liệu trục" className="min-w-0 w-full">
+              <Panel title="Số liệu trục" className="min-w-0 w-full">
                 <div className="mb-2 flex gap-0.5 border-b border-zinc-700">
                   {(
                     [
@@ -1403,7 +1403,7 @@ export function SlabApp() {
 
           {tab === "beams" && (
             <div className="flex flex-col gap-3">
-              <Panel title="3. Số liệu dầm" className="min-w-0 w-full">
+              <Panel title="Số liệu dầm" className="min-w-0 w-full">
                 <div className="flex flex-col gap-2.5">
                   <div className="flex flex-wrap items-end gap-1.5">
                     <Field label="Tên dầm">
@@ -1847,7 +1847,7 @@ export function SlabApp() {
 
           {tab === "draw" && (
             <div className="flex flex-col gap-3">
-              <Panel title="4. Vẽ thép sàn" className="min-w-0 flex-1">
+              <Panel title="Vẽ thép sàn" className="min-w-0 flex-1">
                 <div className="flex flex-col gap-2.5">
                   <Field label="Số hiệu thép" wide>
                     <Input value={zoneForm.mark} onChange={(e) => setZoneForm({ ...zoneForm, mark: e.target.value })} />
@@ -2136,7 +2136,7 @@ export function SlabApp() {
           )}
 
           {tab === "economy2" && (
-            <Panel title="5. Bố trí thép 2 lớp tiết kiệm" className="max-w-3xl">
+            <Panel title="Bố trí thép 2 lớp tiết kiệm" className="max-w-3xl">
               <div className="flex flex-col gap-2.5">
                 <Field label="Thép lớp dưới">
                   <Input
@@ -2208,7 +2208,7 @@ export function SlabApp() {
 
           {tab === "simple2" && (
             <div className="flex flex-col gap-3">
-              <Panel title="6. Bố trí thép 2 lớp đơn giản" className="min-w-0 flex-1">
+              <Panel title="Bố trí thép 2 lớp đơn giản" className="min-w-0 flex-1">
                 <div className="flex flex-col gap-2.5">
                   <Field label="Thép lớp dưới">
                     <Input
@@ -2280,7 +2280,7 @@ export function SlabApp() {
           )}
 
           {tab === "section" && (
-            <Panel title="7. Mặt cắt sàn" className="max-w-xl">
+            <Panel title="Mặt cắt sàn" className="max-w-xl">
               <div className="flex flex-col gap-2.5">
                 <Field label="Tên mặt cắt">
                   <Input
@@ -2313,7 +2313,7 @@ export function SlabApp() {
           )}
 
           {tab === "model3d" && (
-            <Panel title="8. Mô hình 3D" className="max-w-xl">
+            <Panel title="Mô hình 3D" className="max-w-xl">
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"

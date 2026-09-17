@@ -220,13 +220,13 @@ export type TabId =
   | "info";
 
 export const TABS: { id: TabId; label: string }[] = [
-  { id: "plan", label: "1. Thông tin sàn" },
-  { id: "axes", label: "2. Số liệu trục" },
-  { id: "beams", label: "3. Số liệu dầm" },
-  { id: "draw", label: "4. Vẽ thép sàn" },
-  { id: "economy2", label: "5. Thép 2 lớp tiết kiệm" },
-  { id: "simple2", label: "6. Thép 2 lớp đơn giản" },
-  { id: "section", label: "7. Mặt cắt" },
-  { id: "model3d", label: "8. Mô hình 3D" },
+  { id: "plan", label: "Thông tin sàn" },
+  { id: "axes", label: "Số liệu trục" },
+  { id: "beams", label: "Số liệu dầm" },
+  { id: "draw", label: "Vẽ thép sàn" },
+  { id: "economy2", label: "Thép 2 lớp tiết kiệm" },
+  { id: "simple2", label: "Thép 2 lớp đơn giản" },
+  { id: "section", label: "Mặt cắt" },
+  { id: "model3d", label: "Mô hình 3D" },
   { id: "info", label: "Thông tin xuất" },
 ];
