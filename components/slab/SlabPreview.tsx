@@ -346,25 +346,13 @@ export function SlabPreview({
             {axesX.map((ax) => {
               const active = selection?.kind === "axis" && selection.dir === "X" && selection.axisId === ax.id;
               const cx = X(ax.pos);
-              const edgeY = Y(outerBottom);
-              const cy = edgeY + AXIS_BUBBLE_OFFSET;
+              const cy = Y(outerBottom) + AXIS_BUBBLE_OFFSET;
               const stroke = active ? "#79b8ff" : "#52525b";
               const sw = active ? 1.2 : 0.6;
               const interior = axisInteriorSegmentsX(project, axesX, axesY, ax.pos);
               return (
                 <g key={`ax-${ax.id}`}>
-                  {/* Đường dẫn ngoài da dầm → vòng số hiệu */}
-                  <line
-                    x1={cx}
-                    y1={cy - AXIS_BUBBLE_R}
-                    x2={cx}
-                    y2={edgeY}
-                    stroke={stroke}
-                    strokeWidth={sw}
-                    strokeDasharray="3 3"
-                    pointerEvents="none"
-                  />
-                  {/* Tim chỉ trong lòng ô — không xuyên thân dầm */}
+                  {/* Tim chỉ trong lòng ô sàn — không vẽ xuyên / chạm thân dầm */}
                   {interior.map((span, i) => (
                     <line
                       key={`ax-span-${ax.id}-${i}`}
@@ -409,26 +397,14 @@ export function SlabPreview({
             })}
             {axesY.map((ay) => {
               const active = selection?.kind === "axis" && selection.dir === "Y" && selection.axisId === ay.id;
-              const edgeX = X(outerLeft);
-              const cx = edgeX - AXIS_BUBBLE_OFFSET;
+              const cx = X(outerLeft) - AXIS_BUBBLE_OFFSET;
               const cy = Y(ay.pos);
               const stroke = active ? "#fbbf24" : "#52525b";
               const sw = active ? 1.2 : 0.6;
               const interior = axisInteriorSegmentsY(project, axesX, axesY, ay.pos);
               return (
                 <g key={`ay-${ay.id}`}>
-                  {/* Đường dẫn ngoài da dầm → vòng số hiệu */}
-                  <line
-                    x1={cx + AXIS_BUBBLE_R}
-                    y1={cy}
-                    x2={edgeX}
-                    y2={cy}
-                    stroke={stroke}
-                    strokeWidth={sw}
-                    strokeDasharray="3 3"
-                    pointerEvents="none"
-                  />
-                  {/* Tim chỉ trong lòng ô — không xuyên thân dầm */}
+                  {/* Tim chỉ trong lòng ô sàn — không vẽ xuyên / chạm thân dầm */}
                   {interior.map((span, i) => (
                     <line
                       key={`ay-span-${ay.id}-${i}`}

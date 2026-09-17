@@ -183,7 +183,6 @@ function drawPlan(
   for (const ax of axesX) {
     const x = toX(ax.pos);
     const by = edgeBottom + AXIS_BUBBLE_OFFSET;
-    line(ctx, x, edgeBottom, x, by - AXIS_BUBBLE_R, 0.35);
     for (const span of axisInteriorSegmentsX(project, axesX, axesY, ax.pos)) {
       line(ctx, x, toY(span.hi), x, toY(span.lo), 0.35);
     }
@@ -199,7 +198,6 @@ function drawPlan(
   for (const ay of axesY) {
     const y = toY(ay.pos);
     const bx = edgeLeft - AXIS_BUBBLE_OFFSET;
-    line(ctx, bx + AXIS_BUBBLE_R, y, edgeLeft, y, 0.35);
     for (const span of axisInteriorSegmentsY(project, axesX, axesY, ay.pos)) {
       line(ctx, toX(span.lo), y, toX(span.hi), y, 0.35);
     }
