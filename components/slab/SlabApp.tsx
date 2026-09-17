@@ -40,6 +40,7 @@ import {
   patchBeamSegShift,
   getBeamSegShift,
   patchBeamType,
+  patchBeamTypeDim,
   rectNearlyEquals,
   removeAxis,
   removeBeam,
@@ -1243,10 +1244,10 @@ export function SlabApp() {
             <div className="flex flex-col gap-3">
               <Panel title="3. Số liệu dầm" className="min-w-0 w-full">
                 <div className="flex flex-col gap-2.5">
-                  <Field label="Tên dầm" wide>
-                    <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-end gap-1.5">
+                    <Field label="Tên dầm">
                       <Input
-                        className="min-w-0 flex-1"
+                        className="w-24"
                         value={project.info.beamNamePrefix}
                         placeholder="VD: D1"
                         onChange={(e) => patchInfo({ beamNamePrefix: e.target.value })}
@@ -1257,11 +1258,30 @@ export function SlabApp() {
                           }
                         }}
                       />
-                      <Button size="sm" variant="success" onClick={addBeamTypeFromForm} title="Lưu loại dầm vào danh sách">
-                        <Plus /> Thêm
-                      </Button>
-                    </div>
-                  </Field>
+                    </Field>
+                    <Field label="H dầm" unit="mm">
+                      <Input
+                        type="number"
+                        className="w-20"
+                        value={project.info.beamH ?? 500}
+                        onChange={(e) => patchBeamDims({ beamH: Number(e.target.value) || 0 })}
+                      />
+                    </Field>
+                    <Field label="B dầm" unit="mm">
+                      <Input
+                        type="number"
+                        className="w-20"
+                        value={project.info.beamB ?? 220}
+                        onChange={(e) => patchBeamDims({ beamB: Number(e.target.value) || 0 })}
+                      />
+                    </Field>
+                    <Button size="sm" variant="success" onClick={addBeamTypeFromForm} title="Lưu vào danh sách">
+                      <Plus /> Thêm
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-zinc-500">
+                    Cùng tên D1 có thể thêm nhiều dòng với H/B khác nhau.
+                  </p>
                 </div>
                 <div className="mt-3 rounded border border-zinc-700 bg-zinc-950/60 p-2">
                   <div className="mb-2 text-xs font-semibold text-sky-300">Số liệu dầm</div>
@@ -1313,46 +1333,69 @@ export function SlabApp() {
                 <div className="mt-3 rounded border border-zinc-700 bg-zinc-950/60 p-2">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div className="text-xs font-semibold text-sky-300">Danh sách dầm</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Button size="sm" variant="secondary" onClick={() => persist(addBeam(project, "Y"))}>
-                        <Plus /> Thêm dầm đứng
-                      </Button>
-                      <Button size="sm" variant="secondary" onClick={() => persist(addBeam(project, "X"))}>
-                        <Plus /> Thêm dầm ngang
-                      </Button>
-                    </div>
                   </div>
                   <p className="mb-1.5 text-[10px] text-zinc-500">
-                    Nhập tên (D1) + H/B/B1 → bấm Thêm. Shift/Ctrl chọn loại; chọn đoạn trên bản vẽ rồi Gán tên.
+                    Mỗi dòng: tên · H · B. Shift/Ctrl chọn; chọn đoạn trên bản vẽ rồi Gán tên.
                   </p>
+                  <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_2rem] items-center gap-1.5 px-1.5 text-[10px] text-zinc-500">
+                    <span>Tên dầm</span>
+                    <span>H</span>
+                    <span>B</span>
+                    <span />
+                  </div>
                   <div className="max-h-64 space-y-1.5 overflow-auto">
                     {(project.beamTypes ?? []).length === 0 && (
                       <p className="text-[11px] text-zinc-500">
-                        Chưa có loại dầm. Điền tên (VD: D1) rồi bấm Thêm.
+                        Chưa có loại dầm. Điền tên / H / B rồi bấm Thêm.
                       </p>
                     )}
                     {sortedBeamTypes().map((t) => {
                       const selected = listSelectedIds.includes(t.id);
+                      const m = String(t.size || "").match(/^(\d+)\s*[x×]\s*(\d+)/i);
+                      const bVal = m ? Number(m[1]) : 220;
+                      const hVal = m ? Number(m[2]) : 500;
                       return (
                         <div
                           key={t.id}
-                          className={`flex flex-wrap items-center gap-1.5 rounded border px-1.5 py-1 ${
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => handleListTypeClick(t.id, e)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleListTypeClick(t.id, e as unknown as ReactMouseEvent);
+                            }
+                          }}
+                          className={`grid cursor-pointer grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_2rem] items-center gap-1.5 rounded border px-1.5 py-1 ${
                             selected ? "border-emerald-600 bg-emerald-950/40" : "border-zinc-700"
                           }`}
                         >
-                          <button
-                            type="button"
-                            className="min-w-0 flex-1 text-left text-xs text-zinc-200 hover:text-sky-300"
-                            onClick={(e) => handleListTypeClick(t.id, e)}
-                          >
-                            {t.name} · {t.size} · B1={Math.round(t.offset)}
-                          </button>
                           <Input
-                            className="w-16"
-                            title="Tên loại dầm"
+                            className="min-w-0"
+                            title="Tên dầm"
                             value={t.name}
                             onChange={(e) =>
                               persist(patchBeamType(project, t.id, { name: e.target.value }))
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Input
+                            type="number"
+                            className="w-full"
+                            title="H dầm (mm)"
+                            value={hVal}
+                            onChange={(e) =>
+                              persist(patchBeamTypeDim(project, t.id, "H", Number(e.target.value) || 0))
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Input
+                            type="number"
+                            className="w-full"
+                            title="B dầm (mm)"
+                            value={bVal}
+                            onChange={(e) =>
+                              persist(patchBeamTypeDim(project, t.id, "B", Number(e.target.value) || 0))
                             }
                             onClick={(e) => e.stopPropagation()}
                           />
@@ -1360,7 +1403,8 @@ export function SlabApp() {
                             size="sm"
                             variant="danger"
                             className="px-1"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setListSelectedIds((prev) => prev.filter((id) => id !== t.id));
                               persist(removeBeamType(project, t.id));
                             }}
@@ -1399,7 +1443,7 @@ export function SlabApp() {
                       </Button>
                       <p className="w-full text-[10px] text-zinc-500">
                         {listSelectedIds.length > 0
-                          ? `${listSelectedIds.length} loại trên danh sách`
+                          ? `${listSelectedIds.length} dòng trên danh sách`
                           : `${beamMultiSelect.length} đoạn trên bản vẽ`}
                         {" · "}
                         Chọn đoạn trên bản vẽ (Ctrl/Shift) rồi Gán tên.

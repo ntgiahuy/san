@@ -1727,8 +1727,8 @@ export function suggestNextBeamTypeName(project: SlabProject): string {
 }
 
 /**
- * Lưu loại dầm vào danh sách (nút Thêm).
- * Trùng tên → cập nhật size/B1; không trùng → thêm mới.
+ * Thêm loại dầm vào danh sách (nút Thêm).
+ * Cùng tên vẫn thêm được dòng mới nếu H/B khác (1 tên có thể nhiều kích thước).
  */
 export function addOrUpdateBeamType(
   project: SlabProject,
@@ -1742,13 +1742,29 @@ export function addOrUpdateBeamType(
     ? Math.round(input.offset as number)
     : Math.round(B1);
   const types = [...(project.beamTypes ?? [])];
-  const idx = types.findIndex((t) => t.name.toLowerCase() === name.toLowerCase());
-  if (idx >= 0) {
-    types[idx] = { ...types[idx], name, size, offset };
-  } else {
-    types.push({ id: uid("bt"), name, size, offset });
-  }
+  types.push({ id: uid("bt"), name, size, offset });
   return { ...project, beamTypes: types };
+}
+
+/** Đổi H hoặc B của một loại dầm (giữ thành phần còn lại trong size). */
+export function patchBeamTypeDim(
+  project: SlabProject,
+  typeId: string,
+  which: "H" | "B",
+  value: number,
+): SlabProject {
+  const v = Math.max(1, Math.round(value) || 1);
+  return {
+    ...project,
+    beamTypes: (project.beamTypes ?? []).map((t) => {
+      if (t.id !== typeId) return t;
+      const m = String(t.size || "").match(/^(\d+)\s*[x×]\s*(\d+)/i);
+      const b = m ? Number(m[1]) : 220;
+      const h = m ? Number(m[2]) : 500;
+      const size = which === "B" ? formatBeamSize(v, h) : formatBeamSize(b, v);
+      return { ...t, size };
+    }),
+  };
 }
 
 export function removeBeamType(project: SlabProject, typeId: string): SlabProject {
