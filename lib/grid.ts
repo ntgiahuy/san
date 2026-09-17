@@ -1630,6 +1630,111 @@ export function insertSlabBayY(project: SlabProject, spanMm = 3000): SlabProject
   return applyAxesToProject({ ...base, axesY: nextY });
 }
 
+/**
+ * Chèn dầm vào giữa ô sàn (ix, iy).
+ * method "X" (UI Phương X) = dầm đứng → chèn trục X giữa ô.
+ * method "Y" (UI Phương Y) = dầm ngang → chèn trục Y giữa ô.
+ * `splitMm`: khoảng từ mép đầu ô đến tim dầm mới (mặc định giữa ô).
+ */
+export function insertBeamInBay(
+  project: SlabProject,
+  ix: number,
+  iy: number,
+  method: "X" | "Y",
+  type: Pick<BeamTypeDef, "name" | "size" | "offset">,
+  splitMm?: number,
+): SlabProject {
+  const base = ensureAxes(project);
+  const axesX = sortAxes(base.axesX ?? []);
+  const axesY = sortAxes(base.axesY ?? []);
+  if (ix < 0 || ix >= axesX.length - 1 || iy < 0 || iy >= axesY.length - 1) return project;
+
+  const { planWidth: W, planHeight: Hplan } = planSizeFromAxes(axesX, axesY);
+  const parsed = parseSize(type.size || formatBeamSize(base.info.beamB, base.info.beamH));
+  const bw = parsed.b;
+  const name = (type.name || "").trim() || "D";
+  const offset = Number.isFinite(type.offset) ? Math.round(type.offset) : Math.round(bw / 2);
+
+  if (method === "X") {
+    // Dầm đứng: trục X mới giữa axesX[ix] .. axesX[ix+1]
+    const a0 = axesX[ix];
+    const a1 = axesX[ix + 1];
+    const span = a1.pos - a0.pos;
+    if (span < 100) return project;
+    const fromLeft =
+      splitMm !== undefined && Number.isFinite(splitMm)
+        ? Math.round(splitMm)
+        : Math.round(span / 2);
+    const pos = Math.min(a1.pos - 50, Math.max(a0.pos + 50, a0.pos + fromLeft));
+    const neu: GridAxis = { id: uid("ax"), name: nextAxisNameX(axesX), pos };
+    const nextX = sortAxes([...axesX, neu]);
+    const axisIdx = nextX.findIndex((a) => a.id === neu.id);
+    const beam: PlanBeam = {
+      id: uid("beam"),
+      name,
+      size: formatBeamSize(parsed.b, parsed.h),
+      direction: "Y",
+      axis: neu.pos,
+      axisId: neu.id,
+      start: 0,
+      end: Hplan,
+      offset: beamOffsetForAxisIndex(bw, axisIdx, nextX.length),
+    };
+    // Nếu type có B1 tường minh và không phải biên — ưu tiên offset từ loại
+    if (Number.isFinite(type.offset) && axisIdx > 0 && axisIdx < nextX.length - 1) {
+      beam.offset = offset;
+    }
+    const beams = [...(base.beams ?? []), beam];
+    const next = applyAxesToProject({ ...base, axesX: nextX, beams });
+    return {
+      ...next,
+      info: syncBeamInfo({
+        ...next.info,
+        beamCountX: next.beams.filter((b) => b.direction === "Y").length,
+        beamCountY: next.beams.filter((b) => b.direction === "X").length,
+      }),
+    };
+  }
+
+  // Phương Y: dầm ngang — chèn trục Y
+  const a0 = axesY[iy];
+  const a1 = axesY[iy + 1];
+  const span = a1.pos - a0.pos;
+  if (span < 100) return project;
+  const fromBottom =
+    splitMm !== undefined && Number.isFinite(splitMm)
+      ? Math.round(splitMm)
+      : Math.round(span / 2);
+  const pos = Math.min(a1.pos - 50, Math.max(a0.pos + 50, a0.pos + fromBottom));
+  const neu: GridAxis = { id: uid("ay"), name: nextAxisNameY(axesY), pos };
+  const nextY = sortAxes([...axesY, neu]);
+  const axisIdx = nextY.findIndex((a) => a.id === neu.id);
+  const beam: PlanBeam = {
+    id: uid("beam"),
+    name,
+    size: formatBeamSize(parsed.b, parsed.h),
+    direction: "X",
+    axis: neu.pos,
+    axisId: neu.id,
+    start: 0,
+    end: W,
+    offset: beamOffsetForAxisIndex(bw, axisIdx, nextY.length),
+  };
+  if (Number.isFinite(type.offset) && axisIdx > 0 && axisIdx < nextY.length - 1) {
+    beam.offset = offset;
+  }
+  const beams = [...(base.beams ?? []), beam];
+  const next = applyAxesToProject({ ...base, axesY: nextY, beams });
+  return {
+    ...next,
+    info: syncBeamInfo({
+      ...next.info,
+      beamCountX: next.beams.filter((b) => b.direction === "Y").length,
+      beamCountY: next.beams.filter((b) => b.direction === "X").length,
+    }),
+  };
+}
+
 /** Phạm vi vẽ dầm theo chiều dài: kéo đầu tới da dầm ngược phương nếu có. */
 export function beamDrawRange(
   project: SlabProject,

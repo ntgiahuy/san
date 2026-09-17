@@ -54,6 +54,7 @@ import {
   suggestNextBeamTypeName,
   syncBeamInfo,
   syncBeamsToAxes,
+  insertBeamInBay,
 } from "@/lib/grid";
 import { withBasePath } from "@/lib/base-path";
 import { downloadPdf, generateSlabPdf } from "@/lib/pdf/generate";
@@ -117,6 +118,12 @@ export function SlabApp() {
     Array<{ beamId: string; segIndex: number }>
   >([]);
   const [bulkBeamName, setBulkBeamName] = useState("");
+  /** Chế độ chèn dầm vào giữa ô sàn (sau khi bấm Chèn dầm). */
+  const [insertBeamMode, setInsertBeamMode] = useState(false);
+  const [insertMethodX, setInsertMethodX] = useState(true);
+  const [insertMethodY, setInsertMethodY] = useState(false);
+  /** Khoảng từ mép ô đến tim dầm mới (mm); trống = giữa ô. */
+  const [insertSplitMm, setInsertSplitMm] = useState("");
   const [axisDirTab, setAxisDirTab] = useState<"X" | "Y">("X");
   /** Chế độ thép khi đặt/sửa sàn thấp: nhấn | cắt */
   const [lowRebarMode, setLowRebarMode] = useState<LowSlabRebarMode>("press");
@@ -397,6 +404,95 @@ export function SlabApp() {
     setBeamMultiSelect([]);
     setListSelectedIds([]);
     setListAnchorId(null);
+    setInsertBeamMode(false);
+  }
+
+  /** Loại dầm dùng khi chèn: ưu tiên dòng đã chọn trên danh sách. */
+  function resolveInsertBeamType(): { name: string; size: string; offset: number } | null {
+    const selectedTypes = (project.beamTypes ?? []).filter((t) => listSelectedIds.includes(t.id));
+    const t = selectedTypes[0];
+    if (t) {
+      return {
+        name: t.name,
+        size: t.size || `${project.info.beamB}x${project.info.beamH}`,
+        offset: Number.isFinite(t.offset)
+          ? t.offset
+          : Math.round((project.info.beamB || 220) / 2),
+      };
+    }
+    const name = (bulkBeamName.trim() || project.info.beamNamePrefix || "").trim();
+    if (!name) return null;
+    return {
+      name,
+      size: `${project.info.beamB}x${project.info.beamH}`,
+      offset: Number.isFinite(project.info.beamB1)
+        ? project.info.beamB1
+        : Math.round((project.info.beamB || 220) / 2),
+    };
+  }
+
+  function toggleInsertBeamMode() {
+    if (insertBeamMode) {
+      setInsertBeamMode(false);
+      setStatus(null);
+      return;
+    }
+    if (!insertMethodX && !insertMethodY) {
+      setStatus("Tick Phương X và/hoặc Phương Y trước khi chèn dầm.");
+      return;
+    }
+    const type = resolveInsertBeamType();
+    if (!type) {
+      setStatus("Chọn loại dầm trên danh sách (hoặc nhập tên) rồi bấm Chèn dầm.");
+      return;
+    }
+    setInsertBeamMode(true);
+    setTab("beams");
+    setStatus(
+      `Chèn dầm «${type.name}» (${[
+        insertMethodX ? "Phương X" : null,
+        insertMethodY ? "Phương Y" : null,
+      ]
+        .filter(Boolean)
+        .join(" + ")}) — click ô sàn trên bản vẽ.`,
+    );
+  }
+
+  function insertBeamAtBay(ix: number, iy: number) {
+    const type = resolveInsertBeamType();
+    if (!type) {
+      setStatus("Chọn loại dầm trên danh sách trước khi chèn.");
+      setInsertBeamMode(false);
+      return;
+    }
+    if (!insertMethodX && !insertMethodY) {
+      setStatus("Tick Phương X và/hoặc Phương Y.");
+      return;
+    }
+    const raw = insertSplitMm.trim();
+    const split =
+      raw === "" ? undefined : Math.max(50, Math.round(Number(raw)) || 0);
+    let next = project;
+    if (insertMethodX) {
+      next = insertBeamInBay(next, ix, iy, "X", type, split);
+    }
+    if (insertMethodY) {
+      next = insertBeamInBay(next, ix, iy, "Y", type, split);
+    }
+    persist(next);
+    const added = next.beams.filter((b) => !(project.beams ?? []).some((o) => o.id === b.id));
+    const last = added[added.length - 1];
+    if (last) {
+      const segs = beamSegments(next, last);
+      const mid = segs[Math.floor(segs.length / 2)] ?? segs[0];
+      if (mid) {
+        setPlanSelection({ kind: "beam", beamId: last.id, segIndex: mid.index });
+        setBeamMultiSelect([{ beamId: last.id, segIndex: mid.index }]);
+      }
+    }
+    setStatus(
+      `Đã chèn dầm «${type.name}» vào ô — chỉnh khoảng cách trục (L) ở panel dầm đang chọn nếu cần.`,
+    );
   }
 
   function handlePlanSelect(sel: PlanSelection | null, e?: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) {
@@ -405,7 +501,13 @@ export function SlabApp() {
       return;
     }
 
+    if (insertBeamMode && sel.kind === "bay") {
+      insertBeamAtBay(sel.ix, sel.iy);
+      return;
+    }
+
     if (sel.kind === "beam") {
+      setInsertBeamMode(false);
       setTab("beams");
       const ctrl = Boolean(e?.ctrlKey || e?.metaKey);
       const shift = Boolean(e?.shiftKey);
@@ -1357,7 +1459,7 @@ export function SlabApp() {
                     <div className="text-xs font-semibold text-sky-300">Danh sách dầm</div>
                   </div>
                   <p className="mb-1.5 text-[10px] text-zinc-500">
-                    Mỗi dòng: tên · H · B. Shift/Ctrl chọn; chọn đoạn trên bản vẽ rồi Gán tên.
+                    Mỗi dòng: tên · H · B. Shift/Ctrl chọn; Gán tên đoạn trên bản vẽ; hoặc Chèn dầm vào giữa ô (Phương X/Y).
                   </p>
                   <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_2rem] items-center gap-1.5 px-1.5 text-[10px] text-zinc-500">
                     <span>Tên dầm</span>
@@ -1437,7 +1539,7 @@ export function SlabApp() {
                       );
                     })}
                   </div>
-                  {(listSelectedIds.length > 0 || beamMultiSelect.length > 0) && (
+                  {(listSelectedIds.length > 0 || beamMultiSelect.length > 0 || insertBeamMode) && (
                     <div className="mt-2 flex flex-wrap items-end gap-2 rounded border border-amber-800/50 bg-amber-950/20 p-2">
                       <Field label="Gán tên dầm đã chọn" wide>
                         <Input
@@ -1454,21 +1556,61 @@ export function SlabApp() {
                       </Button>
                       <Button
                         size="sm"
+                        variant={insertBeamMode ? "success" : "secondary"}
+                        className={insertBeamMode ? "ring-1 ring-emerald-400" : undefined}
+                        title="Chọn loại dầm + Phương X/Y, bấm Chèn dầm, rồi click ô sàn"
+                        onClick={toggleInsertBeamMode}
+                      >
+                        <Plus /> Chèn dầm
+                      </Button>
+                      <Button
+                        size="sm"
                         variant="secondary"
                         onClick={() => {
                           setListSelectedIds([]);
                           setBeamMultiSelect([]);
                           setBulkBeamName("");
+                          setInsertBeamMode(false);
                         }}
                       >
                         Bỏ chọn nhiều
                       </Button>
+                      <div className="flex w-full flex-wrap items-center gap-3">
+                        <label className="flex items-center gap-1.5 text-xs text-zinc-300">
+                          <Checkbox
+                            checked={insertMethodX}
+                            onCheckedChange={(v) => setInsertMethodX(Boolean(v))}
+                          />
+                          Phương X
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-zinc-300">
+                          <Checkbox
+                            checked={insertMethodY}
+                            onCheckedChange={(v) => setInsertMethodY(Boolean(v))}
+                          />
+                          Phương Y
+                        </label>
+                        <Field label="Khoảng cách trục (mm)">
+                          <Input
+                            type="number"
+                            className="w-24"
+                            placeholder="Giữa ô"
+                            title="Khoảng từ mép ô đến tim dầm mới; để trống = giữa ô. Có thể sửa L sau khi chèn."
+                            value={insertSplitMm}
+                            onChange={(e) => setInsertSplitMm(e.target.value)}
+                          />
+                        </Field>
+                      </div>
                       <p className="w-full text-[10px] text-zinc-500">
                         {listSelectedIds.length > 0
                           ? `${listSelectedIds.length} dòng trên danh sách`
-                          : `${beamMultiSelect.length} đoạn trên bản vẽ`}
+                          : beamMultiSelect.length > 0
+                            ? `${beamMultiSelect.length} đoạn trên bản vẽ`
+                            : "Chèn dầm"}
                         {" · "}
-                        Chọn đoạn trên bản vẽ (Ctrl/Shift) rồi Gán tên.
+                        {insertBeamMode
+                          ? "Đang chèn — click ô sàn trên bản vẽ. Tick Phương X/Y; chỉnh khoảng cách trục rồi chèn hoặc sửa L sau."
+                          : "Chọn đoạn trên bản vẽ (Ctrl/Shift) rồi Gán tên — hoặc Chèn dầm vào giữa ô."}
                       </p>
                     </div>
                   )}
