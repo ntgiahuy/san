@@ -1399,7 +1399,7 @@ export function SlabApp() {
                   <p className="mt-1.5 text-[10px] leading-snug text-zinc-500">
                     {lowRebarMode === "press"
                       ? "Nhấn: thép đi thẳng xuyên ô; tại dầm quanh ô nhấn xuống bằng chênh cao độ sàn thấp."
-                      : "Cắt: tách với sàn thường; vẫn bố trí thép trong ô sàn thấp và lên thân dầm quanh ô."}
+                      : "Cắt: tách với sàn thường; thép trong ô thấp + lên thân dầm, lệch ½ khoảng rải để không chồng sắt."}
                   </p>
                 </div>
               </Panel>

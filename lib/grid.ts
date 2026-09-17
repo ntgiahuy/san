@@ -551,7 +551,7 @@ export function stripRebarBarSegments(
 /**
  * Thép riêng cho từng ô sàn thấp chế độ cắt:
  * chạy trong lòng ô và lên thân dầm biên của ô (da ngoài ± lớp BV).
- * Độc lập với thép sàn thường (đã bị cắt tại mí da ô).
+ * Lệch ½ khoảng rải so với thép sàn thường để không chồng 2 lớp trên thân dầm.
  */
 export function cutLowSlabRebarSegments(
   project: SlabProject,
@@ -559,6 +559,7 @@ export function cutLowSlabRebarSegments(
   axesY: GridAxis[],
 ): RebarBarSeg[] {
   const cover = slabCoverMm(project);
+  const offset = cutLowRebarOffsetMm(project);
   const out: RebarBarSeg[] = [];
   if (axesX.length < 2 || axesY.length < 2) return out;
 
@@ -597,10 +598,33 @@ export function cutLowSlabRebarSegments(
     const mx = (slab.x0 + slab.x1) / 2;
     const my = (slab.y0 + slab.y1) / 2;
 
-    if (x1 - x0 > 1) out.push({ dir: "X", x0, x1, y: my });
-    if (y1 - y0 > 1) out.push({ dir: "Y", y0, y1, x: mx });
+    // Lệch 1 bên trong lòng ô (tránh trùng vị trí với thép sàn thường trên dầm chung)
+    const yBar = clampCutLowOffset(my, offset, slab.y0 + cover, slab.y1 - cover);
+    const xBar = clampCutLowOffset(mx, offset, slab.x0 + cover, slab.x1 - cover);
+
+    if (x1 - x0 > 1) out.push({ dir: "X", x0, x1, y: yBar });
+    if (y1 - y0 > 1) out.push({ dir: "Y", y0, y1, x: xBar });
   }
   return out;
+}
+
+/** Nửa khoảng rải thép (mm) — dùng để lệch thép sàn thấp cắt. */
+export function cutLowRebarOffsetMm(project: SlabProject): number {
+  const fromZone = (project.zones ?? []).find((z) => Number(z.spacing) >= 50);
+  if (fromZone) return Math.max(40, Math.round(Number(fromZone.spacing) / 2));
+  const spec = project.simple2?.bottomSpec ?? project.economy2?.bottomSpec ?? "";
+  const m = String(spec).match(/a\s*(\d+)/i);
+  if (m) return Math.max(40, Math.round(Number(m[1]) / 2));
+  return 75;
+}
+
+function clampCutLowOffset(center: number, offset: number, lo: number, hi: number): number {
+  if (hi - lo < 2) return center;
+  const prefer = center + offset;
+  if (prefer >= lo && prefer <= hi) return prefer;
+  const other = center - offset;
+  if (other >= lo && other <= hi) return other;
+  return Math.min(hi, Math.max(lo, prefer));
 }
 
 export type RebarPressMark = {
