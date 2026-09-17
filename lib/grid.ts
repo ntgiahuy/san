@@ -105,43 +105,84 @@ export function bayRebarExtent(
 }
 
 /**
- * Các đoạn tim trục đứng (phương X) nằm trong khoảng trống giữa da dầm ngang —
- * không vẽ xuyên thân dầm.
+ * Các đoạn tim trục đứng chỉ trong lòng ô sàn (giữa da trong dầm).
+ * Không vẽ khi tim trùng thân dầm đứng.
  */
-export function axisClearSpansY(
+export function axisInteriorSegmentsX(
   project: SlabProject,
+  axesX: GridAxis[],
   axesY: GridAxis[],
+  axisPos: number,
 ): { lo: number; hi: number }[] {
-  const sorted = sortAxes(axesY);
   const spans: { lo: number; hi: number }[] = [];
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const bottom = beamOuterFaces(sorted[i].pos, beamSectionOnAxis(project, "X", sorted[i]));
-    const top = beamOuterFaces(sorted[i + 1].pos, beamSectionOnAxis(project, "X", sorted[i + 1]));
-    const lo = bottom.hi;
-    const hi = top.lo;
-    if (hi > lo + 0.5) spans.push({ lo, hi });
+  const eps = 0.5;
+  for (let ix = 0; ix < axesX.length - 1; ix++) {
+    for (let iy = 0; iy < axesY.length - 1; iy++) {
+      const slab = baySlabExtent(project, axesX, axesY, ix, iy);
+      if (axisPos > slab.x0 + eps && axisPos < slab.x1 - eps && slab.y1 > slab.y0 + eps) {
+        spans.push({ lo: slab.y0, hi: slab.y1 });
+      }
+    }
   }
-  return spans;
+  return mergeAxisSpans(spans);
 }
 
 /**
- * Các đoạn tim trục ngang (phương Y) nằm trong khoảng trống giữa da dầm đứng —
- * không vẽ xuyên thân dầm.
+ * Các đoạn tim trục ngang chỉ trong lòng ô sàn (giữa da trong dầm).
+ * Không vẽ khi tim trùng thân dầm ngang.
  */
-export function axisClearSpansX(
+export function axisInteriorSegmentsY(
   project: SlabProject,
   axesX: GridAxis[],
+  axesY: GridAxis[],
+  axisPos: number,
 ): { lo: number; hi: number }[] {
-  const sorted = sortAxes(axesX);
   const spans: { lo: number; hi: number }[] = [];
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const left = beamOuterFaces(sorted[i].pos, beamSectionOnAxis(project, "Y", sorted[i]));
-    const right = beamOuterFaces(sorted[i + 1].pos, beamSectionOnAxis(project, "Y", sorted[i + 1]));
-    const lo = left.hi;
-    const hi = right.lo;
-    if (hi > lo + 0.5) spans.push({ lo, hi });
+  const eps = 0.5;
+  for (let ix = 0; ix < axesX.length - 1; ix++) {
+    for (let iy = 0; iy < axesY.length - 1; iy++) {
+      const slab = baySlabExtent(project, axesX, axesY, ix, iy);
+      if (axisPos > slab.y0 + eps && axisPos < slab.y1 - eps && slab.x1 > slab.x0 + eps) {
+        spans.push({ lo: slab.x0, hi: slab.x1 });
+      }
+    }
   }
-  return spans;
+  return mergeAxisSpans(spans);
+}
+
+function mergeAxisSpans(spans: { lo: number; hi: number }[]): { lo: number; hi: number }[] {
+  if (spans.length === 0) return [];
+  const sorted = [...spans].sort((a, b) => a.lo - b.lo);
+  const out: { lo: number; hi: number }[] = [{ ...sorted[0] }];
+  for (let i = 1; i < sorted.length; i++) {
+    const last = out[out.length - 1];
+    if (sorted[i].lo <= last.hi + 0.5) last.hi = Math.max(last.hi, sorted[i].hi);
+    else out.push({ ...sorted[i] });
+  }
+  return out;
+}
+
+/** Phần dầm nhô ngoài khung plan (mm) — dùng neo vòng số hiệu ngoài da dầm. */
+export function planBeamBleed(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+): { xMin: number; xMax: number; yMin: number; yMax: number } {
+  let xMin = 0;
+  let xMax = project.planWidth;
+  let yMin = 0;
+  let yMax = project.planHeight;
+  for (const ax of axesX) {
+    const f = beamOuterFaces(ax.pos, beamSectionOnAxis(project, "Y", ax));
+    xMin = Math.min(xMin, f.lo);
+    xMax = Math.max(xMax, f.hi);
+  }
+  for (const ay of axesY) {
+    const f = beamOuterFaces(ay.pos, beamSectionOnAxis(project, "X", ay));
+    yMin = Math.min(yMin, f.lo);
+    yMax = Math.max(yMax, f.hi);
+  }
+  return { xMin, xMax, yMin, yMax };
 }
 
 /**

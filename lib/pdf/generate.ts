@@ -9,10 +9,11 @@ import {
   type ScheduleRow,
 } from "../calc";
 import {
-  axisClearSpansX,
-  axisClearSpansY,
+  axisInteriorSegmentsX,
+  axisInteriorSegmentsY,
   bayRebarExtent,
   beamDrawRange,
+  planBeamBleed,
   sortAxes,
   SLAB_REBAR_HOOK_MM,
 } from "../grid";
@@ -23,9 +24,9 @@ const PAGE_H = 1191;
 const BLACK = rgb(0, 0, 0);
 const GRAY = rgb(0.45, 0.45, 0.45);
 const REBAR_RED = rgb(0.86, 0.15, 0.15);
-/** Vòng số hiệu trục PDF: bán kính + khoảng hở khỏi mép dầm. */
+/** Vòng số hiệu trục PDF: bán kính + khoảng hở khỏi da dầm. */
 const AXIS_BUBBLE_R = 7;
-const AXIS_BUBBLE_GAP = 10;
+const AXIS_BUBBLE_GAP = 12;
 const AXIS_BUBBLE_OFFSET = AXIS_BUBBLE_R + AXIS_BUBBLE_GAP;
 
 type Ctx = {
@@ -175,14 +176,15 @@ function drawPlan(
 
   const axesX = sortAxes(project.axesX ?? []);
   const axesY = sortAxes(project.axesY ?? []);
-  const clearSpansY = axisClearSpansY(project, axesY);
-  const clearSpansX = axisClearSpansX(project, axesX);
+  const bleed = planBeamBleed(project, axesX, axesY);
+  const edgeLeft = toX(bleed.xMin);
+  const edgeBottom = toY(bleed.yMin);
 
   for (const ax of axesX) {
     const x = toX(ax.pos);
-    const by = y0 + ph + AXIS_BUBBLE_OFFSET;
-    line(ctx, x, y0 + ph, x, by - AXIS_BUBBLE_R, 0.35);
-    for (const span of clearSpansY) {
+    const by = edgeBottom + AXIS_BUBBLE_OFFSET;
+    line(ctx, x, edgeBottom, x, by - AXIS_BUBBLE_R, 0.35);
+    for (const span of axisInteriorSegmentsX(project, axesX, axesY, ax.pos)) {
       line(ctx, x, toY(span.hi), x, toY(span.lo), 0.35);
     }
     ctx.page.drawCircle({
@@ -196,9 +198,9 @@ function drawPlan(
   }
   for (const ay of axesY) {
     const y = toY(ay.pos);
-    const bx = x0 - AXIS_BUBBLE_OFFSET;
-    line(ctx, bx + AXIS_BUBBLE_R, y, x0, y, 0.35);
-    for (const span of clearSpansX) {
+    const bx = edgeLeft - AXIS_BUBBLE_OFFSET;
+    line(ctx, bx + AXIS_BUBBLE_R, y, edgeLeft, y, 0.35);
+    for (const span of axisInteriorSegmentsY(project, axesX, axesY, ay.pos)) {
       line(ctx, toX(span.lo), y, toX(span.hi), y, 0.35);
     }
     ctx.page.drawCircle({

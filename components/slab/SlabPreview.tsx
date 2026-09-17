@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { effectiveZones, parseBeamSize } from "@/lib/calc";
 import {
-  axisClearSpansX,
-  axisClearSpansY,
+  axisInteriorSegmentsX,
+  axisInteriorSegmentsY,
   bayRebarExtent,
   baySlabExtent,
   beamDrawRange,
+  planBeamBleed,
   sortAxes,
   SLAB_REBAR_HOOK_MM,
 } from "@/lib/grid";
@@ -17,9 +18,9 @@ type Anchor = { leftPct: number; topPct: number };
 
 /** Bán kính vòng số hiệu trục (px SVG). */
 const AXIS_BUBBLE_R = 11;
-/** Khoảng hở giữa mép dầm/sàn và vòng số hiệu — không dính vào dầm. */
-const AXIS_BUBBLE_GAP = 16;
-/** Tâm vòng số hiệu cách mép sàn. */
+/** Khoảng hở giữa da dầm ngoài và vòng số hiệu. */
+const AXIS_BUBBLE_GAP = 18;
+/** Tâm vòng số hiệu cách da dầm ngoài. */
 const AXIS_BUBBLE_OFFSET = AXIS_BUBBLE_R + AXIS_BUBBLE_GAP;
 
 function clamp(n: number, lo: number, hi: number) {
@@ -51,7 +52,16 @@ export function SlabPreview({
 
   const W = 640;
   const H = 420;
-  const pad = Math.max(52, AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 6);
+  const bleed = useMemo(() => planBeamBleed(project, axesX, axesY), [project, axesX, axesY]);
+  const bleedMm = Math.max(
+    0,
+    -bleed.xMin,
+    -bleed.yMin,
+    bleed.xMax - project.planWidth,
+    bleed.yMax - project.planHeight,
+  );
+  // Chừa chỗ: dầm nhô ngoài plan + vòng số hiệu + khe hở
+  const pad = Math.max(64, AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 12 + bleedMm * 0.035);
   const sx = (W - pad * 2) / Math.max(project.planWidth, 1);
   const sy = (H - pad * 2) / Math.max(project.planHeight, 1);
   const s = Math.min(sx, sy);
@@ -59,8 +69,9 @@ export function SlabPreview({
   const oy = pad + (H - pad * 2 - project.planHeight * s) / 2;
   const X = (mm: number) => ox + mm * s;
   const Y = (mm: number) => oy + (project.planHeight - mm) * s;
-  const clearSpansY = useMemo(() => axisClearSpansY(project, axesY), [project, axesY]);
-  const clearSpansX = useMemo(() => axisClearSpansX(project, axesX), [project, axesX]);
+  /** Da dầm ngoài cùng — neo vòng số hiệu / đường dẫn (không dính thân dầm). */
+  const outerLeft = bleed.xMin;
+  const outerBottom = bleed.yMin;
 
   function anchorFromSvg(svgX: number, svgY: number): Anchor {
     return {
@@ -86,8 +97,8 @@ export function SlabPreview({
     const axes = sel.dir === "X" ? axesX : axesY;
     const ax = axes.find((a) => a.id === sel.axisId);
     if (!ax) return { leftPct: 50, topPct: 40 };
-    if (sel.dir === "X") return anchorFromSvg(X(ax.pos), Y(0) + AXIS_BUBBLE_OFFSET + 20);
-    return anchorFromSvg(X(0) - AXIS_BUBBLE_OFFSET, Y(ax.pos));
+    if (sel.dir === "X") return anchorFromSvg(X(ax.pos), Y(outerBottom) + AXIS_BUBBLE_OFFSET + 20);
+    return anchorFromSvg(X(outerLeft) - AXIS_BUBBLE_OFFSET, Y(ax.pos));
   }
 
   function pick(sel: PlanSelection | null, e?: MouseEvent) {
@@ -335,24 +346,26 @@ export function SlabPreview({
             {axesX.map((ax) => {
               const active = selection?.kind === "axis" && selection.dir === "X" && selection.axisId === ax.id;
               const cx = X(ax.pos);
-              const cy = Y(0) + AXIS_BUBBLE_OFFSET;
+              const edgeY = Y(outerBottom);
+              const cy = edgeY + AXIS_BUBBLE_OFFSET;
               const stroke = active ? "#79b8ff" : "#52525b";
               const sw = active ? 1.2 : 0.6;
+              const interior = axisInteriorSegmentsX(project, axesX, axesY, ax.pos);
               return (
                 <g key={`ax-${ax.id}`}>
-                  {/* Nối vòng số hiệu tới mép sàn — nằm ngoài dầm */}
+                  {/* Đường dẫn ngoài da dầm → vòng số hiệu */}
                   <line
                     x1={cx}
                     y1={cy - AXIS_BUBBLE_R}
                     x2={cx}
-                    y2={Y(0)}
+                    y2={edgeY}
                     stroke={stroke}
                     strokeWidth={sw}
                     strokeDasharray="3 3"
                     pointerEvents="none"
                   />
-                  {/* Tim trục chỉ trong khoảng trống giữa da dầm ngang */}
-                  {clearSpansY.map((span, i) => (
+                  {/* Tim chỉ trong lòng ô — không xuyên thân dầm */}
+                  {interior.map((span, i) => (
                     <line
                       key={`ax-span-${ax.id}-${i}`}
                       x1={cx}
@@ -396,25 +409,27 @@ export function SlabPreview({
             })}
             {axesY.map((ay) => {
               const active = selection?.kind === "axis" && selection.dir === "Y" && selection.axisId === ay.id;
-              const cx = X(0) - AXIS_BUBBLE_OFFSET;
+              const edgeX = X(outerLeft);
+              const cx = edgeX - AXIS_BUBBLE_OFFSET;
               const cy = Y(ay.pos);
               const stroke = active ? "#fbbf24" : "#52525b";
               const sw = active ? 1.2 : 0.6;
+              const interior = axisInteriorSegmentsY(project, axesX, axesY, ay.pos);
               return (
                 <g key={`ay-${ay.id}`}>
-                  {/* Nối vòng số hiệu tới mép sàn — nằm ngoài dầm */}
+                  {/* Đường dẫn ngoài da dầm → vòng số hiệu */}
                   <line
                     x1={cx + AXIS_BUBBLE_R}
                     y1={cy}
-                    x2={X(0)}
+                    x2={edgeX}
                     y2={cy}
                     stroke={stroke}
                     strokeWidth={sw}
                     strokeDasharray="3 3"
                     pointerEvents="none"
                   />
-                  {/* Tim trục chỉ trong khoảng trống giữa da dầm đứng */}
-                  {clearSpansX.map((span, i) => (
+                  {/* Tim chỉ trong lòng ô — không xuyên thân dầm */}
+                  {interior.map((span, i) => (
                     <line
                       key={`ay-span-${ay.id}-${i}`}
                       x1={X(span.lo)}
