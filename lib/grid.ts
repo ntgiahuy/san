@@ -512,7 +512,7 @@ export function expandCutsByCover(
 
 /**
  * Thép liên tục từ dầm biên đầu → dầm biên cuối:
- * điểm đầu/cuối = da dầm ngoài ± lớp bảo vệ (cover).
+ * điểm đầu/cuối = da dầm ngoài ± lớp bảo vệ (cover), theo đúng vị trí dầm lệch/xéo tại tim thanh.
  * Cắt tại ô thủng / sàn thấp chế độ cắt: mép = mí da ± cover.
  * Sàn thấp nhấn: thép chạy xuyên ô như sàn thường (nhấn tại dầm quanh ô).
  * Không bố trí thép trên dầm độc lập (cả hai bên đều không có thép liên tục).
@@ -531,77 +531,75 @@ export function stripRebarBarSegments(
   const axLast = axesX[axesX.length - 1];
   const ayFirst = axesY[0];
   const ayLast = axesY[axesY.length - 1];
-  const leftOuter = beamOuterFaces(axFirst.pos, beamSectionOnAxis(project, "Y", axFirst)).lo;
-  const rightOuter = beamOuterFaces(axLast.pos, beamSectionOnAxis(project, "Y", axLast)).hi;
-  const bottomOuter = beamOuterFaces(ayFirst.pos, beamSectionOnAxis(project, "X", ayFirst)).lo;
-  const topOuter = beamOuterFaces(ayLast.pos, beamSectionOnAxis(project, "X", ayLast)).hi;
 
-  // Thanh ngang (phương X): mỗi hàng ô — từ da ngoài biên trái + cover → da ngoài biên phải − cover
-  const xBarLo = leftOuter + cover;
-  const xBarHi = rightOuter - cover;
-  if (xBarHi - xBarLo > 1) {
-    for (let iy = 0; iy < axesY.length - 1; iy++) {
-      let yLo = Infinity;
-      let yHi = -Infinity;
-      for (let ix = 0; ix < axesX.length - 1; ix++) {
-        const slab = baySlabExtent(project, axesX, axesY, ix, iy);
-        yLo = Math.min(yLo, slab.y0);
-        yHi = Math.max(yHi, slab.y1);
-      }
-      if (!(yHi > yLo)) continue;
-      const my = (yLo + yHi) / 2;
-      const bandLo = yLo + 1;
-      const bandHi = yHi - 1;
-      const obstacleCuts = expandCutsByCover(
-        cuts
-          .filter((r) => Math.min(r.y1, r.y0) < bandHi && Math.max(r.y1, r.y0) > bandLo)
-          .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) })),
-        cover,
-      );
-      // Chỉ cắt hết thân dầm khi cả hai bên đều không có sàn thường
-      const indep = independentBeamGaps(project, axesX, axesY, "X", iy);
-      const normals = normalBaySpansAlongStrip(project, axesX, axesY, "X", iy);
-      const segs = keepSegmentsTouchingNormalBays(
-        dropSegmentsInsideGaps(subtract1D(xBarLo, xBarHi, [...obstacleCuts, ...indep]), indep),
-        normals,
-      );
-      for (const s of segs) {
-        out.push({ dir: "X", x0: s.lo, x1: s.hi, y: my });
-      }
+  // Thanh ngang (phương X): mỗi hàng ô — đầu/cuối móc theo da dầm biên tại Y = tim thanh
+  for (let iy = 0; iy < axesY.length - 1; iy++) {
+    let yLo = Infinity;
+    let yHi = -Infinity;
+    for (let ix = 0; ix < axesX.length - 1; ix++) {
+      const slab = baySlabExtent(project, axesX, axesY, ix, iy);
+      yLo = Math.min(yLo, slab.y0);
+      yHi = Math.max(yHi, slab.y1);
+    }
+    if (!(yHi > yLo)) continue;
+    const my = (yLo + yHi) / 2;
+    const leftOuter = beamOuterFacesAtAlong(project, "Y", axFirst, my).lo;
+    const rightOuter = beamOuterFacesAtAlong(project, "Y", axLast, my).hi;
+    const xBarLo = leftOuter + cover;
+    const xBarHi = rightOuter - cover;
+    if (!(xBarHi - xBarLo > 1)) continue;
+    const bandLo = yLo + 1;
+    const bandHi = yHi - 1;
+    const obstacleCuts = expandCutsByCover(
+      cuts
+        .filter((r) => Math.min(r.y1, r.y0) < bandHi && Math.max(r.y1, r.y0) > bandLo)
+        .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) })),
+      cover,
+    );
+    // Chỉ cắt hết thân dầm khi cả hai bên đều không có sàn thường
+    const indep = independentBeamGaps(project, axesX, axesY, "X", iy);
+    const normals = normalBaySpansAlongStrip(project, axesX, axesY, "X", iy);
+    const segs = keepSegmentsTouchingNormalBays(
+      dropSegmentsInsideGaps(subtract1D(xBarLo, xBarHi, [...obstacleCuts, ...indep]), indep),
+      normals,
+    );
+    for (const s of segs) {
+      out.push({ dir: "X", x0: s.lo, x1: s.hi, y: my });
     }
   }
 
-  // Thanh đứng (phương Y): mỗi cột ô — từ da ngoài biên dưới + cover → da ngoài biên trên − cover
-  const yBarLo = bottomOuter + cover;
-  const yBarHi = topOuter - cover;
-  if (yBarHi - yBarLo > 1) {
-    for (let ix = 0; ix < axesX.length - 1; ix++) {
-      let xLo = Infinity;
-      let xHi = -Infinity;
-      for (let iy = 0; iy < axesY.length - 1; iy++) {
-        const slab = baySlabExtent(project, axesX, axesY, ix, iy);
-        xLo = Math.min(xLo, slab.x0);
-        xHi = Math.max(xHi, slab.x1);
-      }
-      if (!(xHi > xLo)) continue;
-      const mx = (xLo + xHi) / 2;
-      const bandLo = xLo + 1;
-      const bandHi = xHi - 1;
-      const obstacleCuts = expandCutsByCover(
-        cuts
-          .filter((r) => Math.min(r.x1, r.x0) < bandHi && Math.max(r.x1, r.x0) > bandLo)
-          .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) })),
-        cover,
-      );
-      const indep = independentBeamGaps(project, axesX, axesY, "Y", ix);
-      const normals = normalBaySpansAlongStrip(project, axesX, axesY, "Y", ix);
-      const segs = keepSegmentsTouchingNormalBays(
-        dropSegmentsInsideGaps(subtract1D(yBarLo, yBarHi, [...obstacleCuts, ...indep]), indep),
-        normals,
-      );
-      for (const s of segs) {
-        out.push({ dir: "Y", y0: s.lo, y1: s.hi, x: mx });
-      }
+  // Thanh đứng (phương Y): mỗi cột ô — đầu/cuối móc theo da dầm biên tại X = tim thanh
+  for (let ix = 0; ix < axesX.length - 1; ix++) {
+    let xLo = Infinity;
+    let xHi = -Infinity;
+    for (let iy = 0; iy < axesY.length - 1; iy++) {
+      const slab = baySlabExtent(project, axesX, axesY, ix, iy);
+      xLo = Math.min(xLo, slab.x0);
+      xHi = Math.max(xHi, slab.x1);
+    }
+    if (!(xHi > xLo)) continue;
+    const mx = (xLo + xHi) / 2;
+    const bottomOuter = beamOuterFacesAtAlong(project, "X", ayFirst, mx).lo;
+    const topOuter = beamOuterFacesAtAlong(project, "X", ayLast, mx).hi;
+    const yBarLo = bottomOuter + cover;
+    const yBarHi = topOuter - cover;
+    if (!(yBarHi - yBarLo > 1)) continue;
+    const bandLo = xLo + 1;
+    const bandHi = xHi - 1;
+    const obstacleCuts = expandCutsByCover(
+      cuts
+        .filter((r) => Math.min(r.x1, r.x0) < bandHi && Math.max(r.x1, r.x0) > bandLo)
+        .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) })),
+      cover,
+    );
+    const indep = independentBeamGaps(project, axesX, axesY, "Y", ix);
+    const normals = normalBaySpansAlongStrip(project, axesX, axesY, "Y", ix);
+    const segs = keepSegmentsTouchingNormalBays(
+      dropSegmentsInsideGaps(subtract1D(yBarLo, yBarHi, [...obstacleCuts, ...indep]), indep),
+      normals,
+    );
+    for (const s of segs) {
+      out.push({ dir: "Y", y0: s.lo, y1: s.hi, x: mx });
     }
   }
 
@@ -646,16 +644,6 @@ export function cutLowSlabRebarSegments(
     const ax1 = axesX[ix + 1];
     const ay0 = axesY[iy];
     const ay1 = axesY[iy + 1];
-    const left = beamOuterFaces(ax0.pos, beamSectionOnAxis(project, "Y", ax0));
-    const right = beamOuterFaces(ax1.pos, beamSectionOnAxis(project, "Y", ax1));
-    const bottom = beamOuterFaces(ay0.pos, beamSectionOnAxis(project, "X", ay0));
-    const top = beamOuterFaces(ay1.pos, beamSectionOnAxis(project, "X", ay1));
-
-    // Lên thân dầm: từ da ngoài dầm biên + cover → da ngoài dầm biên kia − cover
-    const x0 = left.lo + cover;
-    const x1 = right.hi - cover;
-    const y0 = bottom.lo + cover;
-    const y1 = top.hi - cover;
     const slab = baySlabExtent(project, axesX, axesY, ix, iy);
     const mx = (slab.x0 + slab.x1) / 2;
     const my = (slab.y0 + slab.y1) / 2;
@@ -663,6 +651,16 @@ export function cutLowSlabRebarSegments(
     // Lệch 1 bên trong lòng ô (tránh trùng vị trí với thép sàn thường trên dầm chung)
     const yBar = clampCutLowOffset(my, offset, slab.y0 + cover, slab.y1 - cover);
     const xBar = clampCutLowOffset(mx, offset, slab.x0 + cover, slab.x1 - cover);
+
+    // Lên thân dầm lệch/xéo: da ngoài tại đúng tim thanh ± lớp BV
+    const left = beamOuterFacesAtAlong(project, "Y", ax0, yBar);
+    const right = beamOuterFacesAtAlong(project, "Y", ax1, yBar);
+    const bottom = beamOuterFacesAtAlong(project, "X", ay0, xBar);
+    const top = beamOuterFacesAtAlong(project, "X", ay1, xBar);
+    const x0 = left.lo + cover;
+    const x1 = right.hi - cover;
+    const y0 = bottom.lo + cover;
+    const y1 = top.hi - cover;
 
     if (x1 - x0 > 1) out.push({ dir: "X", x0, x1, y: yBar });
     if (y1 - y0 > 1) out.push({ dir: "Y", y0, y1, x: xBar });
@@ -729,7 +727,7 @@ export function stripRebarPressMarks(
         const prev = baySlabExtent(project, axesX, axesY, ix - 1, iy);
         if (x0 > prev.x1 + 0.5) beams.push({ lo: prev.x1, hi: x0, along: "X", mid: (prev.x1 + x0) / 2 });
       } else {
-        const faces = beamOuterFaces(axesX[0].pos, beamSectionOnAxis(project, "Y", axesX[0]));
+        const faces = beamOuterFacesAtSpan(project, "Y", axesX[0], iy);
         if (x0 > faces.lo + 0.5) beams.push({ lo: faces.lo, hi: x0, along: "X", mid: (faces.lo + x0) / 2 });
       }
       if (ix < axesX.length - 2) {
@@ -737,14 +735,14 @@ export function stripRebarPressMarks(
         if (next.x0 > x1 + 0.5) beams.push({ lo: x1, hi: next.x0, along: "X", mid: (x1 + next.x0) / 2 });
       } else {
         const ax = axesX[axesX.length - 1];
-        const faces = beamOuterFaces(ax.pos, beamSectionOnAxis(project, "Y", ax));
+        const faces = beamOuterFacesAtSpan(project, "Y", ax, iy);
         if (faces.hi > x1 + 0.5) beams.push({ lo: x1, hi: faces.hi, along: "X", mid: (x1 + faces.hi) / 2 });
       }
       if (iy > 0) {
         const prev = baySlabExtent(project, axesX, axesY, ix, iy - 1);
         if (y0 > prev.y1 + 0.5) beams.push({ lo: prev.y1, hi: y0, along: "Y", mid: (prev.y1 + y0) / 2 });
       } else {
-        const faces = beamOuterFaces(axesY[0].pos, beamSectionOnAxis(project, "X", axesY[0]));
+        const faces = beamOuterFacesAtSpan(project, "X", axesY[0], ix);
         if (y0 > faces.lo + 0.5) beams.push({ lo: faces.lo, hi: y0, along: "Y", mid: (faces.lo + y0) / 2 });
       }
       if (iy < axesY.length - 2) {
@@ -752,7 +750,7 @@ export function stripRebarPressMarks(
         if (next.y0 > y1 + 0.5) beams.push({ lo: y1, hi: next.y0, along: "Y", mid: (y1 + next.y0) / 2 });
       } else {
         const ay = axesY[axesY.length - 1];
-        const faces = beamOuterFaces(ay.pos, beamSectionOnAxis(project, "X", ay));
+        const faces = beamOuterFacesAtSpan(project, "X", ay, ix);
         if (faces.hi > y1 + 0.5) beams.push({ lo: y1, hi: faces.hi, along: "Y", mid: (y1 + faces.hi) / 2 });
       }
 
@@ -891,6 +889,54 @@ export function beamOuterFacesAtSpan(
   const beam = findBeamOnAxis(project, beamDir, axis);
   if (!beam) return base;
   return beamSegAvgOuterFaces(beam, spanIndex);
+}
+
+/**
+ * Nội suy mặt bên đoạn dầm tại vị trí dọc theo đoạn (alongMm giữa seg.lo..seg.hi).
+ * Dầm xéo: lo/hi thay đổi tuyến tính từ đầu → cuối.
+ */
+export function beamSegFacesAtAlong(
+  beam: PlanBeam,
+  segIndex: number,
+  alongMm: number,
+  segLo: number,
+  segHi: number,
+): { lo: number; hi: number } {
+  const f = beamSegSideFaces(beam, segIndex);
+  const span = segHi - segLo;
+  const t = span > 1e-6 ? (alongMm - segLo) / span : 0.5;
+  const u = Math.min(1, Math.max(0, t));
+  return {
+    lo: f.lo0 + (f.lo1 - f.lo0) * u,
+    hi: f.hi0 + (f.hi1 - f.hi0) * u,
+  };
+}
+
+/**
+ * Mặt ngoài dầm tại tọa độ dọc theo dầm (mm) — nội suy dịch/xéo đoạn chứa điểm đó.
+ * Dầm đứng: alongMm = Y; dầm ngang: alongMm = X.
+ */
+export function beamOuterFacesAtAlong(
+  project: SlabProject,
+  beamDir: PlanBeam["direction"],
+  axis: GridAxis,
+  alongMm: number,
+): { lo: number; hi: number } {
+  const sec = beamSectionOnAxis(project, beamDir, axis);
+  const base = beamOuterFaces(axis.pos, sec);
+  const beam = findBeamOnAxis(project, beamDir, axis);
+  if (!beam) return base;
+  const segs = beamSegments(project, beam);
+  if (segs.length === 0) return base;
+  let seg = segs.find((s) => alongMm >= s.lo - 0.5 && alongMm <= s.hi + 0.5);
+  if (!seg) {
+    seg = segs.reduce((best, s) => {
+      const d = alongMm < s.lo ? s.lo - alongMm : alongMm > s.hi ? alongMm - s.hi : 0;
+      const bd = alongMm < best.lo ? best.lo - alongMm : alongMm > best.hi ? alongMm - best.hi : 0;
+      return d < bd ? s : best;
+    });
+  }
+  return beamSegFacesAtAlong(beam, seg.index, alongMm, seg.lo, seg.hi);
 }
 
 export function baySlabExtent(
