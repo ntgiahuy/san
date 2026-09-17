@@ -19,7 +19,7 @@ type Anchor = { leftPct: number; topPct: number };
 /** Bán kính vòng số hiệu trục (px SVG). */
 const AXIS_BUBBLE_R = 11;
 /** Khoảng hở giữa da dầm ngoài và vòng số hiệu. */
-const AXIS_BUBBLE_GAP = 22;
+const AXIS_BUBBLE_GAP = 28;
 /** Tâm vòng số hiệu cách da dầm ngoài. */
 const AXIS_BUBBLE_OFFSET = AXIS_BUBBLE_R + AXIS_BUBBLE_GAP;
 
@@ -61,7 +61,7 @@ export function SlabPreview({
     bleed.yMax - project.planHeight,
   );
   // Chừa chỗ: dầm nhô ngoài plan + vòng số hiệu + khe hở
-  const pad = Math.max(64, AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 12 + bleedMm * 0.035);
+  const pad = Math.max(72, AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 16 + bleedMm * 0.04);
   const sx = (W - pad * 2) / Math.max(project.planWidth, 1);
   const sy = (H - pad * 2) / Math.max(project.planHeight, 1);
   const s = Math.min(sx, sy);
