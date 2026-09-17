@@ -1,4 +1,4 @@
-import type { GridAxis, PlanBeam, SlabInfo, SlabProject } from "./types";
+import type { BeamSegShift, GridAxis, PlanBeam, SlabInfo, SlabProject } from "./types";
 import { uid } from "./utils";
 
 /** Thụt thép sàn khỏi da dầm (fallback nếu cover chưa có). */
@@ -49,6 +49,66 @@ export function beamSectionOnAxis(
  */
 export function beamOuterFaces(axisPos: number, sec: BeamSection): { lo: number; hi: number } {
   return { lo: axisPos - sec.b1, hi: axisPos + (sec.bw - sec.b1) };
+}
+
+/** Dịch đoạn dầm (mặc định 0). */
+export function getBeamSegShift(beam: PlanBeam, segIndex: number): BeamSegShift {
+  const raw = beam.segShifts?.[segIndex];
+  const s0 = Number(raw?.s0);
+  const s1 = Number(raw?.s1);
+  return {
+    s0: Number.isFinite(s0) ? s0 : 0,
+    s1: Number.isFinite(s1) ? s1 : 0,
+  };
+}
+
+/** Mặt bên đoạn dầm sau khi cộng B1 + dịch (có thể xéo: mặt đầu ≠ mặt cuối). */
+export function beamSegSideFaces(
+  beam: PlanBeam,
+  segIndex: number,
+): { lo0: number; hi0: number; lo1: number; hi1: number } {
+  const { b: bw } = parseSizeStr(beam.size);
+  const b1 = Number.isFinite(beam.offset) ? (beam.offset as number) : bw / 2;
+  const { s0, s1 } = getBeamSegShift(beam, segIndex);
+  const lo0 = beam.axis - b1 + s0;
+  const lo1 = beam.axis - b1 + s1;
+  return { lo0, hi0: lo0 + bw, lo1, hi1: lo1 + bw };
+}
+
+/** Tim mặt bên trung bình đoạn (dùng cho ô sàn chữ nhật). */
+export function beamSegAvgOuterFaces(
+  beam: PlanBeam,
+  segIndex: number,
+): { lo: number; hi: number } {
+  const f = beamSegSideFaces(beam, segIndex);
+  return { lo: (f.lo0 + f.lo1) / 2, hi: (f.hi0 + f.hi1) / 2 };
+}
+
+/** Ghi dịch đoạn dầm đang chọn (song song hoặc từng đầu — dầm xéo). */
+export function patchBeamSegShift(
+  project: SlabProject,
+  beamId: string,
+  segIndex: number,
+  patch: { shift?: number; s0?: number; s1?: number },
+): SlabProject {
+  const beams = (project.beams ?? []).map((b) => {
+    if (b.id !== beamId) return b;
+    const segs = beamSegments(project, b);
+    const n = Math.max(segs.length, segIndex + 1, b.segShifts?.length ?? 0);
+    const next: BeamSegShift[] = Array.from({ length: n }, (_, i) => getBeamSegShift(b, i));
+    const cur = next[segIndex] ?? { s0: 0, s1: 0 };
+    if (patch.shift !== undefined) {
+      const v = Math.round(Number(patch.shift) || 0);
+      next[segIndex] = { s0: v, s1: v };
+    } else {
+      next[segIndex] = {
+        s0: patch.s0 !== undefined ? Math.round(Number(patch.s0) || 0) : cur.s0,
+        s1: patch.s1 !== undefined ? Math.round(Number(patch.s1) || 0) : cur.s1,
+      };
+    }
+    return { ...b, segShifts: next };
+  });
+  return { ...project, beams };
 }
 
 /**
@@ -128,6 +188,7 @@ export function syncBeamsToAxes(project: SlabProject): SlabProject {
         offset: beamOffsetForAxisIndex(bw, idx, axesX.length),
         start: 0,
         end: Hplan,
+        segShifts: b.segShifts,
       };
     }
 
@@ -142,6 +203,7 @@ export function syncBeamsToAxes(project: SlabProject): SlabProject {
       offset: beamOffsetForAxisIndex(bw, idx, axesY.length),
       start: 0,
       end: W,
+      segShifts: b.segShifts,
     };
   });
 
@@ -803,6 +865,34 @@ export function planBeamBleed(
  * Phạm vi ô sàn theo mép dầm (da trong): giữa hai da dầm đứng / ngang,
  * không lấy từ tim trục.
  */
+/** Dầm gắn trục (nếu có) — dùng kèm dịch đoạn. */
+export function findBeamOnAxis(
+  project: SlabProject,
+  beamDir: PlanBeam["direction"],
+  axis: GridAxis,
+): PlanBeam | undefined {
+  return (project.beams ?? []).find(
+    (b) => b.direction === beamDir && (b.axisId === axis.id || Math.abs(b.axis - axis.pos) < 0.5),
+  );
+}
+
+/**
+ * Mặt ngoài dầm tại một nhịp (có tính dịch đoạn).
+ * spanIndex: với dầm đứng = chỉ số ô theo Y; dầm ngang = chỉ số ô theo X.
+ */
+export function beamOuterFacesAtSpan(
+  project: SlabProject,
+  beamDir: PlanBeam["direction"],
+  axis: GridAxis,
+  spanIndex: number,
+): { lo: number; hi: number } {
+  const sec = beamSectionOnAxis(project, beamDir, axis);
+  const base = beamOuterFaces(axis.pos, sec);
+  const beam = findBeamOnAxis(project, beamDir, axis);
+  if (!beam) return base;
+  return beamSegAvgOuterFaces(beam, spanIndex);
+}
+
 export function baySlabExtent(
   project: SlabProject,
   axesX: GridAxis[],
@@ -814,10 +904,11 @@ export function baySlabExtent(
   const ax1 = axesX[ix + 1];
   const ay0 = axesY[iy];
   const ay1 = axesY[iy + 1];
-  const left = beamOuterFaces(ax0.pos, beamSectionOnAxis(project, "Y", ax0));
-  const right = beamOuterFaces(ax1.pos, beamSectionOnAxis(project, "Y", ax1));
-  const bottom = beamOuterFaces(ay0.pos, beamSectionOnAxis(project, "X", ay0));
-  const top = beamOuterFaces(ay1.pos, beamSectionOnAxis(project, "X", ay1));
+  // Dầm đứng: đoạn theo hàng iy; dầm ngang: đoạn theo cột ix
+  const left = beamOuterFacesAtSpan(project, "Y", ax0, iy);
+  const right = beamOuterFacesAtSpan(project, "Y", ax1, iy);
+  const bottom = beamOuterFacesAtSpan(project, "X", ay0, ix);
+  const top = beamOuterFacesAtSpan(project, "X", ay1, ix);
   const x0 = left.hi;
   const x1 = Math.max(x0, right.lo);
   const y0 = bottom.hi;

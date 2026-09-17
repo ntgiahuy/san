@@ -34,6 +34,8 @@ import {
   equalizeAxisSpans,
   patchBeam,
   patchBeamOnAxis,
+  patchBeamSegShift,
+  getBeamSegShift,
   rectNearlyEquals,
   removeAxis,
   removeBeam,
@@ -179,6 +181,7 @@ export function SlabApp() {
     const seg = segs[planSelection.segIndex];
     if (!seg) return null;
     const parsed = parseBeamSize(beam.size);
+    const shift = getBeamSegShift(beam, seg.index);
     return {
       id: beam.id,
       name: `${beam.name} · ${seg.a0.name}–${seg.a1.name} · ${beam.direction === "Y" ? "đứng" : "ngang"}`,
@@ -192,6 +195,10 @@ export function SlabApp() {
       H: parsed.h,
       B1: Number.isFinite(beam.offset) ? (beam.offset as number) : Math.round(parsed.b / 2),
       direction: beam.direction,
+      s0: shift.s0,
+      s1: shift.s1,
+      /** Dịch song song khi hai đầu bằng nhau; nếu xéo lấy trung bình để hiển thị ô «Dịch đoạn». */
+      shift: shift.s0 === shift.s1 ? shift.s0 : Math.round((shift.s0 + shift.s1) / 2),
     };
   }
 
@@ -238,6 +245,12 @@ export function SlabApp() {
     } else {
       persist(patched);
     }
+  }
+
+  /** Dịch đoạn dầm: song song (shift) hoặc từng đầu (s0/s1 → dầm xéo). */
+  function patchSelectedBeamShift(patch: { shift?: number; s0?: number; s1?: number }) {
+    if (planSelection?.kind !== "beam") return;
+    persist(patchBeamSegShift(project, planSelection.beamId, planSelection.segIndex, patch));
   }
 
 
@@ -1210,6 +1223,59 @@ export function SlabApp() {
                           onChange={(e) => patchSelectedBeamDims({ beamB1: Number(e.target.value) || 0 })}
                         />
                       </Field>
+                      <Field
+                        label={
+                          selectedBeamInfo()!.direction === "Y"
+                            ? "Dịch đoạn (+ phải)"
+                            : "Dịch đoạn (+ trên)"
+                        }
+                        unit="mm"
+                      >
+                        <Input
+                          type="number"
+                          value={selectedBeamInfo()!.shift}
+                          onChange={(e) =>
+                            patchSelectedBeamShift({ shift: Number(e.target.value) || 0 })
+                          }
+                        />
+                      </Field>
+                      <Field
+                        label={
+                          selectedBeamInfo()!.direction === "Y"
+                            ? "Dịch đầu (+ phải)"
+                            : "Dịch đầu (+ trên)"
+                        }
+                        unit="mm"
+                      >
+                        <Input
+                          type="number"
+                          value={selectedBeamInfo()!.s0}
+                          onChange={(e) =>
+                            patchSelectedBeamShift({ s0: Number(e.target.value) || 0 })
+                          }
+                        />
+                      </Field>
+                      <Field
+                        label={
+                          selectedBeamInfo()!.direction === "Y"
+                            ? "Dịch cuối (+ phải)"
+                            : "Dịch cuối (+ trên)"
+                        }
+                        unit="mm"
+                      >
+                        <Input
+                          type="number"
+                          value={selectedBeamInfo()!.s1}
+                          onChange={(e) =>
+                            patchSelectedBeamShift({ s1: Number(e.target.value) || 0 })
+                          }
+                        />
+                      </Field>
+                      <p className="text-[10px] text-zinc-500">
+                        {selectedBeamInfo()!.direction === "Y"
+                          ? "Dịch đoạn: song song trái/phải. Đầu ≠ cuối → dầm xéo."
+                          : "Dịch đoạn: song song lên/xuống. Đầu ≠ cuối → dầm xéo."}
+                      </p>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Button

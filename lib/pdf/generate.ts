@@ -12,6 +12,8 @@ import {
   axisInteriorSegmentsX,
   axisInteriorSegmentsY,
   beamDrawRange,
+  beamSegSideFaces,
+  beamSegments,
   planBeamBleed,
   rectDiagonalHatchSegments,
   rectOpeningDiagonals,
@@ -217,7 +219,7 @@ function drawPlan(
   }
 
   for (const b of project.beams) {
-    drawBeam(ctx, b, toX, toY, s);
+    drawBeam(ctx, b, toX, toY);
   }
 
   for (const ls of project.lowSlabs ?? []) {
@@ -317,23 +319,62 @@ function drawBeam(
   b: PlanBeam,
   toX: (mm: number) => number,
   toY: (mm: number) => number,
-  s: number,
 ) {
   const { project } = ctx;
-  const { b: bw } = parseBeamSize(b.size);
-  const b1 = Number.isFinite(b.offset) ? (b.offset as number) : bw / 2;
-  const { lo, hi } = beamDrawRange(project, b);
+  const segs = beamSegments(project, b);
+  const { lo: fullLo, hi: fullHi } = beamDrawRange(project, b);
+
+  for (const seg of segs) {
+    const { lo0, hi0, lo1, hi1 } = beamSegSideFaces(b, seg.index);
+    const lo = seg.lo;
+    const hi = seg.hi;
+    const pts =
+      b.direction === "Y"
+        ? [
+            [toX(lo0), toY(lo)],
+            [toX(hi0), toY(lo)],
+            [toX(hi1), toY(hi)],
+            [toX(lo1), toY(hi)],
+          ]
+        : [
+            [toX(lo), toY(lo0)],
+            [toX(lo), toY(hi0)],
+            [toX(hi), toY(hi1)],
+            [toX(hi), toY(lo1)],
+          ];
+    // PDF Y đảo qua ty()
+    const path = pts
+      .map(([px, py], i) => `${i === 0 ? "M" : "L"} ${px} ${ty(py)}`)
+      .join(" ") + " Z";
+    ctx.page.drawSvgPath(path, {
+      borderColor: BLACK,
+      borderWidth: 0.85,
+    });
+  }
 
   if (b.direction === "Y") {
-    const xAxis = toX(b.axis);
-    const yTop = toY(hi);
-    const yBot = toY(lo);
-    rect(ctx, xAxis - b1 * s, yTop, bw * s, yBot - yTop, 0.85);
-    textVertical(ctx, `${b.name}(${b.size})`, xAxis - b1 * s + bw * s + 8, (yTop + yBot) / 2, 5.5, false);
+    const faces0 = beamSegSideFaces(b, 0);
+    const xRight = toX(Math.max(faces0.hi0, faces0.hi1));
+    textVertical(
+      ctx,
+      `${b.name}(${b.size})`,
+      xRight + 8,
+      (toY(fullHi) + toY(fullLo)) / 2,
+      5.5,
+      false,
+    );
   } else {
-    const yTop = toY(b.axis + (bw - b1));
-    rect(ctx, toX(lo), yTop, (hi - lo) * s, bw * s, 0.85);
-    textSimple(ctx, `${b.name}(${b.size})`, toX((lo + hi) / 2), yTop - 8, 5.5, false, "center");
+    const faces0 = beamSegSideFaces(b, 0);
+    const yTop = toY(Math.max(faces0.hi0, faces0.hi1));
+    textSimple(
+      ctx,
+      `${b.name}(${b.size})`,
+      toX((fullLo + fullHi) / 2),
+      yTop - 8,
+      5.5,
+      false,
+      "center",
+    );
   }
 }
 

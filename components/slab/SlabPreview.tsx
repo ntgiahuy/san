@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { effectiveZones, parseBeamSize } from "@/lib/calc";
+import { effectiveZones } from "@/lib/calc";
 import {
   axisInteriorSegmentsX,
   axisInteriorSegmentsY,
   baySlabExtent,
-  beamDrawRange,
+  beamSegSideFaces,
   beamSegments,
+  getBeamSegShift,
   planBeamBleed,
   rectDiagonalHatchSegments,
   rectOpeningDiagonals,
@@ -310,133 +311,80 @@ export function SlabPreview({
 
   const beamNodes: ReactNode[] = [];
   for (const beam of project.beams ?? []) {
-    const { b: bw } = parseBeamSize(beam.size);
-    const b1 = Number.isFinite(beam.offset) ? (beam.offset as number) : bw / 2;
     const segs = beamSegments(project, beam);
-    const full = beamDrawRange(project, beam);
-
-    // Thân dầm liên tục (không tô cả thanh khi chọn — chỉ tô đoạn)
-    if (beam.direction === "Y") {
-      beamNodes.push(
-        <g key={`${beam.id}-body`}>
-          <rect
-            x={X(beam.axis) - b1 * s}
-            y={Y(full.hi)}
-            width={bw * s}
-            height={(full.hi - full.lo) * s}
-            fill="#27272a"
-            stroke="#a1a1aa"
-            strokeWidth={1}
-            pointerEvents="none"
-          />
-        </g>,
-      );
-    } else {
-      beamNodes.push(
-        <g key={`${beam.id}-body`}>
-          <rect
-            x={X(full.lo)}
-            y={Y(beam.axis + (bw - b1))}
-            width={(full.hi - full.lo) * s}
-            height={bw * s}
-            fill="#27272a"
-            stroke="#a1a1aa"
-            strokeWidth={1}
-            pointerEvents="none"
-          />
-        </g>,
-      );
-    }
 
     for (const seg of segs) {
       const active =
         selection?.kind === "beam" && selection.beamId === beam.id && selection.segIndex === seg.index;
+      const { lo0, hi0, lo1, hi1 } = beamSegSideFaces(beam, seg.index);
+      const { s0, s1 } = getBeamSegShift(beam, seg.index);
       const lo = seg.lo;
       const hi = seg.hi;
-      if (beam.direction === "Y") {
-        beamNodes.push(
-          <g key={`${beam.id}-s${seg.index}`}>
-            <rect
-              x={X(beam.axis) - Math.max(b1, bw / 2) * s - 10}
-              y={Y(hi)}
-              width={Math.max(bw * s, 18) + 20}
-              height={(hi - lo) * s}
-              fill="transparent"
-              className={interactive ? "cursor-pointer" : undefined}
-              pointerEvents={interactive ? "all" : "none"}
-              onClick={(e) => {
-                if (!interactive || !onSelect) return;
-                e.stopPropagation();
-                pick({ kind: "beam", beamId: beam.id, segIndex: seg.index }, e);
-              }}
-            />
-            {active && (
-              <>
-                <rect
-                  x={X(beam.axis) - b1 * s}
-                  y={Y(hi)}
-                  width={bw * s}
-                  height={(hi - lo) * s}
-                  fill="rgba(52,211,153,0.45)"
-                  stroke="#34d399"
-                  strokeWidth={2}
-                  pointerEvents="none"
-                />
-                {(() => {
-                  const tx = X(beam.axis) + (bw - b1) * s + 10;
-                  const ty = Y((lo + hi) / 2);
-                  return (
-                    <text
-                      x={tx}
-                      y={ty}
-                      fill="#6ee7b7"
-                      fontSize="10"
-                      fontWeight="700"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      transform={`rotate(-90 ${tx} ${ty})`}
-                      pointerEvents="none"
-                    >
-                      {beam.name} · {seg.a0.name}-{seg.a1.name} · L={Math.round(seg.span)}
-                    </text>
-                  );
-                })()}
-              </>
-            )}
-          </g>,
-        );
-      } else {
-        beamNodes.push(
-          <g key={`${beam.id}-s${seg.index}`}>
-            <rect
-              x={X(lo)}
-              y={Y(beam.axis + (bw - b1)) - 10}
-              width={(hi - lo) * s}
-              height={Math.max(bw * s, 18) + 20}
-              fill="transparent"
-              className={interactive ? "cursor-pointer" : undefined}
-              pointerEvents={interactive ? "all" : "none"}
-              onClick={(e) => {
-                if (!interactive || !onSelect) return;
-                e.stopPropagation();
-                pick({ kind: "beam", beamId: beam.id, segIndex: seg.index }, e);
-              }}
-            />
-            {active && (
-              <>
-                <rect
-                  x={X(lo)}
-                  y={Y(beam.axis + (bw - b1))}
-                  width={(hi - lo) * s}
-                  height={bw * s}
-                  fill="rgba(52,211,153,0.45)"
-                  stroke="#34d399"
-                  strokeWidth={2}
-                  pointerEvents="none"
-                />
+
+      // Đa giác đoạn dầm (có thể xéo khi s0 ≠ s1)
+      const pts =
+        beam.direction === "Y"
+          ? [
+              [X(lo0), Y(lo)],
+              [X(hi0), Y(lo)],
+              [X(hi1), Y(hi)],
+              [X(lo1), Y(hi)],
+            ]
+          : [
+              [X(lo), Y(lo0)],
+              [X(lo), Y(hi0)],
+              [X(hi), Y(hi1)],
+              [X(hi), Y(lo1)],
+            ];
+      const points = pts.map(([px, py]) => `${px},${py}`).join(" ");
+      const labelX =
+        beam.direction === "Y" ? X(Math.max(hi0, hi1)) + 10 : X((lo + hi) / 2);
+      const labelY =
+        beam.direction === "Y" ? Y((lo + hi) / 2) : Y(Math.max(hi0, hi1)) - 6;
+
+      beamNodes.push(
+        <g key={`${beam.id}-s${seg.index}`}>
+          <polygon
+            points={points}
+            fill="#27272a"
+            stroke="#a1a1aa"
+            strokeWidth={1}
+            className={interactive ? "cursor-pointer" : undefined}
+            pointerEvents={interactive ? "all" : "none"}
+            onClick={(e) => {
+              if (!interactive || !onSelect) return;
+              e.stopPropagation();
+              pick({ kind: "beam", beamId: beam.id, segIndex: seg.index }, e);
+            }}
+          />
+          {active && (
+            <>
+              <polygon
+                points={points}
+                fill="rgba(52,211,153,0.45)"
+                stroke="#34d399"
+                strokeWidth={2}
+                pointerEvents="none"
+              />
+              {beam.direction === "Y" ? (
                 <text
-                  x={X((lo + hi) / 2)}
-                  y={Y(beam.axis + (bw - b1)) - 6}
+                  x={labelX}
+                  y={labelY}
+                  fill="#6ee7b7"
+                  fontSize="10"
+                  fontWeight="700"
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  transform={`rotate(-90 ${labelX} ${labelY})`}
+                  pointerEvents="none"
+                >
+                  {beam.name} · {seg.a0.name}-{seg.a1.name} · L={Math.round(seg.span)}
+                  {(s0 !== 0 || s1 !== 0) ? ` · Δ=${s0 === s1 ? s0 : `${s0}/${s1}`}` : ""}
+                </text>
+              ) : (
+                <text
+                  x={labelX}
+                  y={labelY}
                   textAnchor="middle"
                   fill="#6ee7b7"
                   fontSize="10"
@@ -444,12 +392,13 @@ export function SlabPreview({
                   pointerEvents="none"
                 >
                   {beam.name} · {seg.a0.name}-{seg.a1.name} · L={Math.round(seg.span)}
+                  {(s0 !== 0 || s1 !== 0) ? ` · Δ=${s0 === s1 ? s0 : `${s0}/${s1}`}` : ""}
                 </text>
-              </>
-            )}
-          </g>,
-        );
-      }
+              )}
+            </>
+          )}
+        </g>,
+      );
     }
   }
 

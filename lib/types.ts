@@ -63,6 +63,19 @@ export interface PlanBeam {
    * Vẽ: mép trái = axis − B1, mép phải = axis + (B − B1).
    */
   offset: number;
+  /**
+   * Dịch từng đoạn dầm so với tim (mm), theo thứ tự đoạn giữa 2 trục giao.
+   * s0 = dịch tại đầu đoạn (a0), s1 = tại cuối (a1).
+   * Dầm đứng (Y): + sang phải (+X). Dầm ngang (X): + lên trên (+Y).
+   * s0 ≠ s1 → dầm xéo.
+   */
+  segShifts?: BeamSegShift[];
+}
+
+/** Dịch đoạn dầm tại hai đầu (mm). */
+export interface BeamSegShift {
+  s0: number;
+  s1: number;
 }
 
 /**
