@@ -1498,10 +1498,10 @@ export function SlabApp() {
                   <p className="mb-1.5 text-[10px] text-zinc-500">
                     Mỗi dòng: tên · H · B. Click đoạn để Gán tên (không cần phím); Shift/Ctrl chỉ khi chọn nhiều; hoặc Chèn dầm vào giữa ô.
                   </p>
-                  <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_2rem] items-center gap-1.5 px-1.5 text-[10px] text-zinc-500">
-                    <span>Tên dầm</span>
-                    <span>H</span>
-                    <span>B</span>
+                  <div className="mb-1.5 grid grid-cols-[minmax(6.5rem,1fr)_3.25rem_2.5rem_1.75rem] items-center gap-1 px-1.5 text-[10px] text-zinc-500">
+                    <span className="truncate">Tên dầm</span>
+                    <span className="text-center">H</span>
+                    <span className="text-center">B</span>
                     <span />
                   </div>
                   <div className="max-h-64 space-y-1.5 overflow-auto">
@@ -1527,12 +1527,12 @@ export function SlabApp() {
                               handleListTypeClick(t.id, e as unknown as ReactMouseEvent);
                             }
                           }}
-                          className={`grid cursor-pointer grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_2rem] items-center gap-1.5 rounded border px-1.5 py-1 ${
+                          className={`grid cursor-pointer grid-cols-[minmax(6.5rem,1fr)_3.25rem_2.5rem_1.75rem] items-center gap-1 rounded border px-1.5 py-1 ${
                             selected ? "border-emerald-600 bg-emerald-950/40" : "border-zinc-700"
                           }`}
                         >
                           <Input
-                            className="min-w-0"
+                            className="min-w-0 w-full whitespace-nowrap"
                             title="Tên dầm"
                             value={t.name}
                             onChange={(e) =>
@@ -1549,7 +1549,7 @@ export function SlabApp() {
                           />
                           <Input
                             type="number"
-                            className="w-full"
+                            className="w-full px-1 text-center"
                             title="H dầm (mm)"
                             value={hVal}
                             onChange={(e) =>
@@ -1566,7 +1566,7 @@ export function SlabApp() {
                           />
                           <Input
                             type="number"
-                            className="w-full"
+                            className="w-full px-1 text-center"
                             title="B dầm (mm)"
                             value={bVal}
                             onChange={(e) =>
@@ -1584,7 +1584,7 @@ export function SlabApp() {
                           <Button
                             size="sm"
                             variant="danger"
-                            className="px-1"
+                            className="h-8 w-7 shrink-0 px-0"
                             onClick={(e) => {
                               e.stopPropagation();
                               setListSelectedIds((prev) => prev.filter((id) => id !== t.id));
