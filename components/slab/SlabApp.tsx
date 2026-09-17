@@ -434,7 +434,7 @@ export function SlabApp() {
   function toggleInsertBeamMode() {
     if (insertBeamMode) {
       setInsertBeamMode(false);
-      setStatus(null);
+      setStatus("Đã tắt chế độ chèn dầm.");
       return;
     }
     if (!insertMethodX && !insertMethodY) {
@@ -454,7 +454,7 @@ export function SlabApp() {
         insertMethodY ? "Phương Y" : null,
       ]
         .filter(Boolean)
-        .join(" + ")}) — click ô sàn trên bản vẽ.`,
+        .join(" + ")}) — click ô sàn trên bản vẽ. Bấm lại Chèn dầm để hủy.`,
     );
   }
 
@@ -491,7 +491,7 @@ export function SlabApp() {
       }
     }
     setStatus(
-      `Đã chèn dầm «${type.name}» vào ô — chỉnh khoảng cách trục (L) ở panel dầm đang chọn nếu cần.`,
+      `Đã chèn dầm «${type.name}» vào ô — chỉnh khoảng cách trục (L) ở panel dầm đang chọn nếu cần. Vẫn đang chèn: click ô khác hoặc bấm Chèn dầm để hủy.`,
     );
   }
 
@@ -1501,7 +1501,14 @@ export function SlabApp() {
                             onChange={(e) =>
                               persist(patchBeamType(project, t.id, { name: e.target.value }))
                             }
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                                setListSelectedIds([t.id]);
+                                setListAnchorId(t.id);
+                                setBulkBeamName(t.name);
+                              }
+                            }}
                           />
                           <Input
                             type="number"
@@ -1511,7 +1518,14 @@ export function SlabApp() {
                             onChange={(e) =>
                               persist(patchBeamTypeDim(project, t.id, "H", Number(e.target.value) || 0))
                             }
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                                setListSelectedIds([t.id]);
+                                setListAnchorId(t.id);
+                                setBulkBeamName(t.name);
+                              }
+                            }}
                           />
                           <Input
                             type="number"
@@ -1521,7 +1535,14 @@ export function SlabApp() {
                             onChange={(e) =>
                               persist(patchBeamTypeDim(project, t.id, "B", Number(e.target.value) || 0))
                             }
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                                setListSelectedIds([t.id]);
+                                setListAnchorId(t.id);
+                                setBulkBeamName(t.name);
+                              }
+                            }}
                           />
                           <Button
                             size="sm"
