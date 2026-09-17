@@ -1094,12 +1094,6 @@ export function SlabApp() {
                   <Button variant="secondary" size="sm" className="text-amber-300" onClick={assignAllBeams}>
                     Gán toàn bộ dầm theo trục…
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={insertOpening}>
-                    Chèn Ô thủng
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={insertLowSlab}>
-                    Chèn Sàn thấp
-                  </Button>
                   <Button
                     variant="secondary"
                     size="sm"
@@ -1278,6 +1272,12 @@ export function SlabApp() {
                   </Button>
                   <Button size="sm" className="bg-amber-600 text-white hover:bg-amber-500" onClick={() => void exportPdf()}>
                     Vẽ thép sàn (PDF)
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={insertOpening}>
+                    Chèn Ô thủng
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={insertLowSlab}>
+                    Chèn Sàn thấp
                   </Button>
                   <Button size="sm" variant="secondary" className="text-amber-300" onClick={() => setStatus(`Thống kê: ${model.schedule.length} số hiệu · ${model.totalWeight.toFixed(1)} kg`)}>
                     Thống kê thép sàn
