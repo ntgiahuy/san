@@ -5,15 +5,14 @@ import { effectiveZones, parseBeamSize } from "@/lib/calc";
 import {
   axisInteriorSegmentsX,
   axisInteriorSegmentsY,
-  bayRebarExtent,
   baySlabExtent,
   beamDrawRange,
   beamSegments,
   planBeamBleed,
   rectDiagonalHatchSegments,
-  rectNearlyEquals,
   rectOpeningDiagonals,
   sortAxes,
+  stripRebarBarSegments,
   SLAB_REBAR_HOOK_MM,
 } from "@/lib/grid";
 import type { PlanSelection, SlabProject } from "@/lib/types";
@@ -601,76 +600,77 @@ export function SlabPreview({
               );
             })}
             {beamNodes}
-            {axesX.slice(0, -1).flatMap((_, ix) =>
-              axesY.slice(0, -1).map((_, iy) => {
-                const extent = baySlabExtent(project, axesX, axesY, ix, iy);
-                const isOpening = (project.openings ?? []).some((o) =>
-                  rectNearlyEquals(o, extent.x0, extent.y0, extent.x1, extent.y1),
-                );
-                if (isOpening) return null;
-                const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
-                const hook = SLAB_REBAR_HOOK_MM;
-                const stroke = "#ef4444";
+            {(() => {
+              const bars = stripRebarBarSegments(project, axesX, axesY);
+              const hook = SLAB_REBAR_HOOK_MM;
+              const stroke = "#ef4444";
+              return bars.map((bar, i) => {
+                if (bar.dir === "X") {
+                  return (
+                    <g key={`rebar-x-${i}`} pointerEvents="none">
+                      <line
+                        x1={X(bar.x0)}
+                        y1={Y(bar.y)}
+                        x2={X(bar.x1)}
+                        y2={Y(bar.y)}
+                        stroke={stroke}
+                        strokeWidth="1.6"
+                        opacity="0.95"
+                      />
+                      <line
+                        x1={X(bar.x0)}
+                        y1={Y(bar.y)}
+                        x2={X(bar.x0)}
+                        y2={Y(bar.y - hook)}
+                        stroke={stroke}
+                        strokeWidth="1.6"
+                        opacity="0.95"
+                      />
+                      <line
+                        x1={X(bar.x1)}
+                        y1={Y(bar.y)}
+                        x2={X(bar.x1)}
+                        y2={Y(bar.y - hook)}
+                        stroke={stroke}
+                        strokeWidth="1.6"
+                        opacity="0.95"
+                      />
+                    </g>
+                  );
+                }
                 return (
-                  <g key={`rebar-bay-${ix}-${iy}`} pointerEvents="none">
+                  <g key={`rebar-y-${i}`} pointerEvents="none">
                     <line
-                      x1={X(x0)}
-                      y1={Y(my)}
-                      x2={X(x1)}
-                      y2={Y(my)}
+                      x1={X(bar.x)}
+                      y1={Y(bar.y0)}
+                      x2={X(bar.x)}
+                      y2={Y(bar.y1)}
                       stroke={stroke}
                       strokeWidth="1.6"
                       opacity="0.95"
                     />
                     <line
-                      x1={X(x0)}
-                      y1={Y(my)}
-                      x2={X(x0)}
-                      y2={Y(my - hook)}
+                      x1={X(bar.x)}
+                      y1={Y(bar.y0)}
+                      x2={X(bar.x + hook)}
+                      y2={Y(bar.y0)}
                       stroke={stroke}
                       strokeWidth="1.6"
                       opacity="0.95"
                     />
                     <line
-                      x1={X(x1)}
-                      y1={Y(my)}
-                      x2={X(x1)}
-                      y2={Y(my - hook)}
-                      stroke={stroke}
-                      strokeWidth="1.6"
-                      opacity="0.95"
-                    />
-                    <line
-                      x1={X(mx)}
-                      y1={Y(y0)}
-                      x2={X(mx)}
-                      y2={Y(y1)}
-                      stroke={stroke}
-                      strokeWidth="1.6"
-                      opacity="0.95"
-                    />
-                    <line
-                      x1={X(mx)}
-                      y1={Y(y0)}
-                      x2={X(mx + hook)}
-                      y2={Y(y0)}
-                      stroke={stroke}
-                      strokeWidth="1.6"
-                      opacity="0.95"
-                    />
-                    <line
-                      x1={X(mx)}
-                      y1={Y(y1)}
-                      x2={X(mx + hook)}
-                      y2={Y(y1)}
+                      x1={X(bar.x)}
+                      y1={Y(bar.y1)}
+                      x2={X(bar.x + hook)}
+                      y2={Y(bar.y1)}
                       stroke={stroke}
                       strokeWidth="1.6"
                       opacity="0.95"
                     />
                   </g>
                 );
-              }),
-            )}
+              });
+            })()}
             <text x={W / 2} y={18} textAnchor="middle" fill="#79b8ff" fontSize="13" fontWeight="700">
               {project.info.name} · {Math.round(project.planWidth)}×{Math.round(project.planHeight)} ×{" "}
               {project.info.thickness}mm

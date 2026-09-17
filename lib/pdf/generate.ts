@@ -11,14 +11,12 @@ import {
 import {
   axisInteriorSegmentsX,
   axisInteriorSegmentsY,
-  bayRebarExtent,
-  baySlabExtent,
   beamDrawRange,
   planBeamBleed,
   rectDiagonalHatchSegments,
-  rectNearlyEquals,
   rectOpeningDiagonals,
   sortAxes,
+  stripRebarBarSegments,
   SLAB_REBAR_HOOK_MM,
 } from "../grid";
 import type { PlanBeam, RebarZone, SlabProject } from "../types";
@@ -245,22 +243,17 @@ function drawPlan(
     textSimple(ctx, o.name || "Ô", toX((x0 + x1) / 2), toY((y0 + y1) / 2), 6, false, "center");
   }
 
-  // Mỗi ô sàn: 1 cây X + 1 cây Y qua tim ô; đỏ, móc 50mm hai đầu; không xuyên thân dầm / ô thủng
+  // Thép từ dầm biên → dầm biên (trừ lớp BV); cắt tại da dầm / ô thủng / sàn thấp
   const hook = SLAB_REBAR_HOOK_MM;
-  for (let ix = 0; ix < axesX.length - 1; ix++) {
-    for (let iy = 0; iy < axesY.length - 1; iy++) {
-      const extent = baySlabExtent(project, axesX, axesY, ix, iy);
-      const isOpening = (project.openings ?? []).some((o) =>
-        rectNearlyEquals(o, extent.x0, extent.y0, extent.x1, extent.y1),
-      );
-      if (isOpening) continue;
-      const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
-      line(ctx, toX(x0), toY(my), toX(x1), toY(my), 0.7, REBAR_RED);
-      line(ctx, toX(x0), toY(my), toX(x0), toY(my - hook), 0.7, REBAR_RED);
-      line(ctx, toX(x1), toY(my), toX(x1), toY(my - hook), 0.7, REBAR_RED);
-      line(ctx, toX(mx), toY(y0), toX(mx), toY(y1), 0.7, REBAR_RED);
-      line(ctx, toX(mx), toY(y0), toX(mx + hook), toY(y0), 0.7, REBAR_RED);
-      line(ctx, toX(mx), toY(y1), toX(mx + hook), toY(y1), 0.7, REBAR_RED);
+  for (const bar of stripRebarBarSegments(project, axesX, axesY)) {
+    if (bar.dir === "X") {
+      line(ctx, toX(bar.x0), toY(bar.y), toX(bar.x1), toY(bar.y), 0.7, REBAR_RED);
+      line(ctx, toX(bar.x0), toY(bar.y), toX(bar.x0), toY(bar.y - hook), 0.7, REBAR_RED);
+      line(ctx, toX(bar.x1), toY(bar.y), toX(bar.x1), toY(bar.y - hook), 0.7, REBAR_RED);
+    } else {
+      line(ctx, toX(bar.x), toY(bar.y0), toX(bar.x), toY(bar.y1), 0.7, REBAR_RED);
+      line(ctx, toX(bar.x), toY(bar.y0), toX(bar.x + hook), toY(bar.y0), 0.7, REBAR_RED);
+      line(ctx, toX(bar.x), toY(bar.y1), toX(bar.x + hook), toY(bar.y1), 0.7, REBAR_RED);
     }
   }
 

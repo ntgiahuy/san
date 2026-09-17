@@ -1,8 +1,14 @@
 import type { GridAxis, PlanBeam, SlabInfo, SlabProject } from "./types";
 import { uid } from "./utils";
 
-/** Thép sàn thụt vào từ da dầm (mm). */
+/** Thụt thép sàn khỏi da dầm (fallback nếu cover chưa có). */
 export const SLAB_REBAR_FACE_INSET_MM = 50;
+
+/** Lớp bảo vệ (mm) — sắt trừ da dầm biên. */
+export function slabCoverMm(project: SlabProject): number {
+  const c = Number(project.info.cover);
+  return Number.isFinite(c) && c >= 0 ? Math.round(c) : SLAB_REBAR_FACE_INSET_MM;
+}
 
 export function formatBeamSize(b: number, h: number): string {
   return `${Math.max(1, Math.round(b))}x${Math.max(1, Math.round(h))}`;
@@ -175,7 +181,7 @@ export function horizontalBeamSegExtent(
 }
 
 /**
- * Phạm vi thép sàn trong ô: giữa da trong hai dầm, thụt insetMm vào trong ô.
+ * Phạm vi thép sàn trong ô: giữa da trong hai dầm, thụt insetMm (mặc định = lớp BV).
  * Không kéo thép xuyên qua thân dầm.
  */
 export function bayRebarExtent(
@@ -184,13 +190,14 @@ export function bayRebarExtent(
   axesY: GridAxis[],
   ix: number,
   iy: number,
-  insetMm = SLAB_REBAR_FACE_INSET_MM,
+  insetMm?: number,
 ): { x0: number; x1: number; y0: number; y1: number; mx: number; my: number } {
+  const inset = insetMm ?? slabCoverMm(project);
   const slab = baySlabExtent(project, axesX, axesY, ix, iy);
-  const x0 = slab.x0 + insetMm;
-  const x1c = Math.max(x0, slab.x1 - insetMm);
-  const y0 = slab.y0 + insetMm;
-  const y1c = Math.max(y0, slab.y1 - insetMm);
+  const x0 = slab.x0 + inset;
+  const x1c = Math.max(x0, slab.x1 - inset);
+  const y0 = slab.y0 + inset;
+  const y1c = Math.max(y0, slab.y1 - inset);
   return {
     x0,
     x1: x1c,
@@ -199,6 +206,163 @@ export function bayRebarExtent(
     mx: (x0 + x1c) / 2,
     my: (y0 + y1c) / 2,
   };
+}
+
+/** Hình chữ nhật cắt thép: ô thủng + sàn thấp (cắt tại mí da). */
+export function rebarCutRects(
+  project: SlabProject,
+): Array<{ x0: number; y0: number; x1: number; y1: number }> {
+  const out: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
+  for (const o of project.openings ?? []) {
+    out.push({ x0: o.x, y0: o.y, x1: o.x + o.w, y1: o.y + o.h });
+  }
+  for (const o of project.lowSlabs ?? []) {
+    out.push({ x0: o.x, y0: o.y, x1: o.x + o.w, y1: o.y + o.h });
+  }
+  return out;
+}
+
+/** Trừ các khoảng cut khỏi [lo,hi]; giữ phần còn lại. */
+export function subtract1D(
+  lo: number,
+  hi: number,
+  cuts: Array<{ lo: number; hi: number }>,
+): Array<{ lo: number; hi: number }> {
+  if (hi - lo < 1) return [];
+  let segs: Array<{ lo: number; hi: number }> = [{ lo, hi }];
+  for (const c of cuts) {
+    const cLo = Math.min(c.lo, c.hi);
+    const cHi = Math.max(c.lo, c.hi);
+    const next: Array<{ lo: number; hi: number }> = [];
+    for (const s of segs) {
+      if (cHi <= s.lo + 0.5 || cLo >= s.hi - 0.5) {
+        next.push(s);
+        continue;
+      }
+      if (cLo > s.lo + 0.5) next.push({ lo: s.lo, hi: Math.min(s.hi, cLo) });
+      if (cHi < s.hi - 0.5) next.push({ lo: Math.max(s.lo, cHi), hi: s.hi });
+    }
+    segs = next.filter((s) => s.hi - s.lo > 1);
+  }
+  return segs;
+}
+
+export type RebarBarSeg =
+  | { dir: "X"; x0: number; x1: number; y: number }
+  | { dir: "Y"; y0: number; y1: number; x: number };
+
+/**
+ * Thép ô sàn: từ da dầm biên trừ lớp BV; nếu gặp ô thủng / sàn thấp thì cắt tại mí da.
+ * Mỗi ô: 1 cây phương X + 1 cây phương Y (có thể bị tách thành nhiều đoạn).
+ */
+export function bayRebarBarSegments(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+  ix: number,
+  iy: number,
+): RebarBarSeg[] {
+  const { x0, x1, y0, y1, mx, my } = bayRebarExtent(project, axesX, axesY, ix, iy);
+  if (x1 - x0 < 2 || y1 - y0 < 2) return [];
+  const cuts = rebarCutRects(project);
+  const hCuts = cuts
+    .filter((r) => my > Math.min(r.y0, r.y1) + 0.5 && my < Math.max(r.y0, r.y1) - 0.5)
+    .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) }));
+  const vCuts = cuts
+    .filter((r) => mx > Math.min(r.x0, r.x1) + 0.5 && mx < Math.max(r.x0, r.x1) - 0.5)
+    .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) }));
+
+  const out: RebarBarSeg[] = [];
+  for (const s of subtract1D(x0, x1, hCuts)) {
+    out.push({ dir: "X", x0: s.lo, x1: s.hi, y: my });
+  }
+  for (const s of subtract1D(y0, y1, vCuts)) {
+    out.push({ dir: "Y", y0: s.lo, y1: s.hi, x: mx });
+  }
+  return out;
+}
+
+/**
+ * Thép liên tục theo nhịp: từ dầm biên → dầm biên (trừ lớp BV),
+ * cắt tại da dầm trung gian + mí da ô thủng / sàn thấp.
+ */
+export function stripRebarBarSegments(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+): RebarBarSeg[] {
+  const cover = slabCoverMm(project);
+  const cuts = rebarCutRects(project);
+  const out: RebarBarSeg[] = [];
+
+  // Phương X (thanh ngang): mỗi hàng ô
+  for (let iy = 0; iy < axesY.length - 1; iy++) {
+    let xLo = Infinity;
+    let xHi = -Infinity;
+    let yLo = Infinity;
+    let yHi = -Infinity;
+    const beamGaps: Array<{ lo: number; hi: number }> = [];
+    for (let ix = 0; ix < axesX.length - 1; ix++) {
+      const slab = baySlabExtent(project, axesX, axesY, ix, iy);
+      xLo = Math.min(xLo, slab.x0);
+      xHi = Math.max(xHi, slab.x1);
+      yLo = Math.min(yLo, slab.y0);
+      yHi = Math.max(yHi, slab.y1);
+      if (ix < axesX.length - 2) {
+        const next = baySlabExtent(project, axesX, axesY, ix + 1, iy);
+        // Khe thân dầm giữa hai ô (da trong trái của ô sau − da trong phải của ô trước)
+        if (next.x0 > slab.x1 + 0.5) beamGaps.push({ lo: slab.x1, hi: next.x0 });
+      }
+    }
+    if (!(xHi > xLo && yHi > yLo)) continue;
+    const my = (yLo + yHi) / 2;
+    const barLo = xLo + cover;
+    const barHi = xHi - cover;
+    const hCuts = [
+      ...beamGaps,
+      ...cuts
+        .filter((r) => my > Math.min(r.y0, r.y1) + 0.5 && my < Math.max(r.y0, r.y1) - 0.5)
+        .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) })),
+    ];
+    for (const s of subtract1D(barLo, barHi, hCuts)) {
+      out.push({ dir: "X", x0: s.lo, x1: s.hi, y: my });
+    }
+  }
+
+  // Phương Y (thanh đứng): mỗi cột ô
+  for (let ix = 0; ix < axesX.length - 1; ix++) {
+    let xLo = Infinity;
+    let xHi = -Infinity;
+    let yLo = Infinity;
+    let yHi = -Infinity;
+    const beamGaps: Array<{ lo: number; hi: number }> = [];
+    for (let iy = 0; iy < axesY.length - 1; iy++) {
+      const slab = baySlabExtent(project, axesX, axesY, ix, iy);
+      xLo = Math.min(xLo, slab.x0);
+      xHi = Math.max(xHi, slab.x1);
+      yLo = Math.min(yLo, slab.y0);
+      yHi = Math.max(yHi, slab.y1);
+      if (iy < axesY.length - 2) {
+        const next = baySlabExtent(project, axesX, axesY, ix, iy + 1);
+        if (next.y0 > slab.y1 + 0.5) beamGaps.push({ lo: slab.y1, hi: next.y0 });
+      }
+    }
+    if (!(xHi > xLo && yHi > yLo)) continue;
+    const mx = (xLo + xHi) / 2;
+    const barLo = yLo + cover;
+    const barHi = yHi - cover;
+    const vCuts = [
+      ...beamGaps,
+      ...cuts
+        .filter((r) => mx > Math.min(r.x0, r.x1) + 0.5 && mx < Math.max(r.x0, r.x1) - 0.5)
+        .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) })),
+    ];
+    for (const s of subtract1D(barLo, barHi, vCuts)) {
+      out.push({ dir: "Y", y0: s.lo, y1: s.hi, x: mx });
+    }
+  }
+
+  return out;
 }
 
 /**
