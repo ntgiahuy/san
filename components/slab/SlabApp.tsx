@@ -1691,14 +1691,6 @@ export function SlabApp() {
                   <Button variant="secondary" size="sm" className="text-amber-300" onClick={assignAllBeams}>
                     Gán toàn bộ dầm theo trục…
                   </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="text-amber-300"
-                    onClick={() => setStatus(`Thống kê dầm: ${project.beams.length} thanh.`)}
-                  >
-                    Thống kê Dầm ({project.beams.length})
-                  </Button>
                 </div>
 
                 {planSelection?.kind === "beam" && selectedBeamInfo() && (
@@ -2196,12 +2188,6 @@ export function SlabApp() {
                 <Button size="sm" className="text-amber-300" variant="secondary" onClick={applyEconomy2}>
                   Áp dụng bố trí tiết kiệm
                 </Button>
-                <Button size="sm" variant="secondary" className="text-amber-300" onClick={() => void exportPdf()}>
-                  Thống kê thép sàn
-                </Button>
-                <Button size="sm" variant="secondary" onClick={() => setPreset("manual")}>
-                  Vẽ thép sàn từng thanh
-                </Button>
               </div>
             </Panel>
           )}
@@ -2243,12 +2229,6 @@ export function SlabApp() {
                   </Button>
                   <Button size="sm" variant="secondary" className="text-amber-300" onClick={applySimple2}>
                     Thép lớp dưới / trên
-                  </Button>
-                  <Button size="sm" variant="secondary" className="text-amber-300" onClick={() => void exportPdf()}>
-                    Thống kê thép sàn
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={() => setPreset("manual")}>
-                    Vẽ thép sàn từng thanh
                   </Button>
                 </div>
               </Panel>
