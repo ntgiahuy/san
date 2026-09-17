@@ -560,7 +560,7 @@ export function SlabApp() {
           setBeamMultiSelect([sel]);
         }
         setPlanSelection(sel);
-        setListSelectedIds([]);
+        // Giữ lựa chọn loại dầm trên danh sách (để Gán tên / Chèn dầm)
         return;
       }
 
@@ -571,14 +571,12 @@ export function SlabApp() {
           return [...prev, { beamId: sel.beamId, segIndex: sel.segIndex }];
         });
         setPlanSelection(sel);
-        setListSelectedIds([]);
         return;
       }
 
+      // Click thường: chọn 1 đoạn — không cần Shift/Ctrl
       setPlanSelection(sel);
       setBeamMultiSelect([{ beamId: sel.beamId, segIndex: sel.segIndex }]);
-      setListSelectedIds([sel.beamId]);
-      setListAnchorId(sel.beamId);
       return;
     }
 
@@ -702,7 +700,7 @@ export function SlabApp() {
     const typeFromList = selectedTypes[0];
     const name = (bulkBeamName.trim() || typeFromList?.name || "").trim();
     if (!name) {
-      setStatus("Nhập tên hoặc chọn loại dầm trên danh sách, rồi click đoạn trên bản vẽ (Shift/Ctrl nếu chọn nhiều).");
+      setStatus("Nhập tên hoặc chọn loại trên danh sách, rồi click đoạn trên bản vẽ (không cần phím).");
       return;
     }
     const targetBeamIds =
@@ -712,7 +710,7 @@ export function SlabApp() {
           ? [planSelection.beamId]
           : [];
     if (targetBeamIds.length === 0) {
-      setStatus("Click đoạn dầm trên bản vẽ để gán tên (Shift/Ctrl chọn nhiều).");
+      setStatus("Click đoạn dầm trên bản vẽ để gán tên — Shift/Ctrl chỉ khi chọn nhiều.");
       return;
     }
     const size = typeFromList?.size || `${project.info.beamB}x${project.info.beamH}`;
@@ -1487,7 +1485,7 @@ export function SlabApp() {
                     <div className="text-xs font-semibold text-sky-300">Danh sách dầm</div>
                   </div>
                   <p className="mb-1.5 text-[10px] text-zinc-500">
-                    Mỗi dòng: tên · H · B. Click đoạn để gán tên; Shift/Ctrl chọn nhiều; hoặc Chèn dầm vào giữa ô (Phương X/Y).
+                    Mỗi dòng: tên · H · B. Click đoạn để Gán tên (không cần phím); Shift/Ctrl chỉ khi chọn nhiều; hoặc Chèn dầm vào giữa ô.
                   </p>
                   <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_2rem] items-center gap-1.5 px-1.5 text-[10px] text-zinc-500">
                     <span>Tên dầm</span>
@@ -1607,7 +1605,7 @@ export function SlabApp() {
                         size="sm"
                         variant={insertBeamMode ? "success" : "secondary"}
                         className={insertBeamMode ? "ring-1 ring-emerald-400" : undefined}
-                        title="Chọn loại dầm + Phương X/Y, bấm Chèn dầm, rồi click ô sàn"
+                        title="Chọn loại dầm + Phương X/Y, bấm Chèn dầm, rồi click ô sàn (không cần phím)"
                         onClick={toggleInsertBeamMode}
                       >
                         <Plus /> Chèn dầm
@@ -1651,15 +1649,18 @@ export function SlabApp() {
                         </Field>
                       </div>
                       <p className="w-full text-[10px] text-zinc-500">
-                        {listSelectedIds.length > 0
-                          ? `${listSelectedIds.length} dòng trên danh sách`
-                          : beamMultiSelect.length > 0
-                            ? `${beamMultiSelect.length} đoạn trên bản vẽ`
-                            : "Chèn dầm"}
+                        {(() => {
+                          const typeCount = (project.beamTypes ?? []).filter((t) =>
+                            listSelectedIds.includes(t.id),
+                          ).length;
+                          if (typeCount > 0) return `${typeCount} loại trên danh sách`;
+                          if (beamMultiSelect.length > 0) return `${beamMultiSelect.length} đoạn trên bản vẽ`;
+                          return "Chèn dầm";
+                        })()}
                         {" · "}
                         {insertBeamMode
-                          ? "Đang chèn — click ô sàn (không thêm trục). Tick Phương X/Y; khoảng cách trục trước khi chèn hoặc sửa Tim sau."
-                          : "Click đoạn rồi Gán tên (Shift/Ctrl chọn nhiều) — hoặc Chèn dầm vào giữa ô (không thêm trục)."}
+                          ? "Đang chèn — click ô sàn (không cần phím, không thêm trục)."
+                          : "Click đoạn rồi Gán tên (không cần phím). Shift/Ctrl chỉ khi chọn nhiều — hoặc Chèn dầm vào giữa ô."}
                       </p>
                     </div>
                   )}
