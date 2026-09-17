@@ -36,6 +36,7 @@ export function SlabPreview({
   project,
   show3d,
   selection = null,
+  beamMultiSelect = [],
   onSelect,
   interactive = false,
   editPanel = null,
@@ -43,7 +44,9 @@ export function SlabPreview({
   project: SlabProject;
   show3d?: boolean;
   selection?: PlanSelection | null;
-  onSelect?: (sel: PlanSelection | null) => void;
+  /** Các đoạn dầm đang chọn (Ctrl/Shift) — tô nhấn trên bản vẽ. */
+  beamMultiSelect?: Array<{ beamId: string; segIndex: number }>;
+  onSelect?: (sel: PlanSelection | null, e?: MouseEvent) => void;
   /** Cho phép nhấp chọn ô sàn / đoạn dầm / số hiệu trục trên bản vẽ. */
   interactive?: boolean;
   /** Bảng chỉnh sửa kích thước hiển thị tại vị trí chọn. */
@@ -109,7 +112,7 @@ export function SlabPreview({
   }
 
   function pick(sel: PlanSelection | null, e?: MouseEvent) {
-    onSelect?.(sel);
+    onSelect?.(sel, e);
     if (!sel) {
       setAnchor(null);
       return;
@@ -315,7 +318,10 @@ export function SlabPreview({
 
     for (const seg of segs) {
       const active =
-        selection?.kind === "beam" && selection.beamId === beam.id && selection.segIndex === seg.index;
+        (selection?.kind === "beam" &&
+          selection.beamId === beam.id &&
+          selection.segIndex === seg.index) ||
+        beamMultiSelect.some((s) => s.beamId === beam.id && s.segIndex === seg.index);
       const { lo0, hi0, lo1, hi1 } = beamSegSideFaces(beam, seg.index);
       const { s0, s1 } = getBeamSegShift(beam, seg.index);
       const lo = seg.lo;

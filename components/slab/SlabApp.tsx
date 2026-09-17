@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
   Box,
   Check,
@@ -100,6 +100,14 @@ export function SlabApp() {
   const [zoneForm, setZoneForm] = useState<RebarZone>(() => draftZone());
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [planSelection, setPlanSelection] = useState<PlanSelection | null>(null);
+  /** Chọn nhiều dầm trên danh sách (Shift/Ctrl) để gán tên. */
+  const [listSelectedIds, setListSelectedIds] = useState<string[]>([]);
+  const [listAnchorId, setListAnchorId] = useState<string | null>(null);
+  /** Chọn nhiều đoạn dầm trên bản vẽ (Shift/Ctrl) để gán tên. */
+  const [beamMultiSelect, setBeamMultiSelect] = useState<
+    Array<{ beamId: string; segIndex: number }>
+  >([]);
+  const [bulkBeamName, setBulkBeamName] = useState("");
   const [axisDirTab, setAxisDirTab] = useState<"X" | "Y">("X");
   /** Chế độ thép khi đặt/sửa sàn thấp: nhấn | cắt */
   const [lowRebarMode, setLowRebarMode] = useState<LowSlabRebarMode>("press");
@@ -355,13 +363,143 @@ export function SlabApp() {
     }
   }
 
-  function handlePlanSelect(sel: PlanSelection | null) {
-    setPlanSelection(sel);
-    if (!sel) return;
+  function clearPlanSelection() {
+    setPlanSelection(null);
+    setBeamMultiSelect([]);
+    setListSelectedIds([]);
+    setListAnchorId(null);
+  }
+
+  function handlePlanSelect(sel: PlanSelection | null, e?: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) {
+    if (!sel) {
+      clearPlanSelection();
+      return;
+    }
+
     if (sel.kind === "beam") {
       setTab("beams");
-    } else if (sel.kind === "bay") setTab("draw");
+      const ctrl = Boolean(e?.ctrlKey || e?.metaKey);
+      const shift = Boolean(e?.shiftKey);
+      const list = listBeamsLeftToRight().filter(
+        (x): x is Extract<PlanSelection, { kind: "beam" }> => x.kind === "beam",
+      );
+      const sameSeg = (a: { beamId: string; segIndex: number }, b: { beamId: string; segIndex: number }) =>
+        a.beamId === b.beamId && a.segIndex === b.segIndex;
+
+      if (shift && (planSelection?.kind === "beam" || beamMultiSelect.length > 0)) {
+        const anchor =
+          planSelection?.kind === "beam"
+            ? planSelection
+            : beamMultiSelect[beamMultiSelect.length - 1];
+        const aIdx = list.findIndex((x) => sameSeg(x, anchor));
+        const bIdx = list.findIndex((x) => sameSeg(x, sel));
+        if (aIdx >= 0 && bIdx >= 0) {
+          const lo = Math.min(aIdx, bIdx);
+          const hi = Math.max(aIdx, bIdx);
+          setBeamMultiSelect(list.slice(lo, hi + 1).map((x) => ({ beamId: x.beamId, segIndex: x.segIndex })));
+        } else {
+          setBeamMultiSelect([sel]);
+        }
+        setPlanSelection(sel);
+        setListSelectedIds([]);
+        return;
+      }
+
+      if (ctrl) {
+        setBeamMultiSelect((prev) => {
+          const exists = prev.some((x) => sameSeg(x, sel));
+          if (exists) return prev.filter((x) => !sameSeg(x, sel));
+          return [...prev, { beamId: sel.beamId, segIndex: sel.segIndex }];
+        });
+        setPlanSelection(sel);
+        setListSelectedIds([]);
+        return;
+      }
+
+      setPlanSelection(sel);
+      setBeamMultiSelect([{ beamId: sel.beamId, segIndex: sel.segIndex }]);
+      setListSelectedIds([sel.beamId]);
+      setListAnchorId(sel.beamId);
+      return;
+    }
+
+    setBeamMultiSelect([]);
+    setPlanSelection(sel);
+    if (sel.kind === "bay") setTab("draw");
     else if (sel.kind === "axis") setTab("axes");
+  }
+
+  /** Danh sách dầm (một dòng / thanh), sắp theo tim. */
+  function sortedPlanBeams() {
+    return [...(project.beams ?? [])].sort(
+      (a, b) =>
+        (a.direction === b.direction ? 0 : a.direction === "Y" ? -1 : 1) ||
+        a.axis - b.axis ||
+        a.name.localeCompare(b.name),
+    );
+  }
+
+  function handleListBeamClick(beamId: string, e: ReactMouseEvent) {
+    const beams = sortedPlanBeams();
+    const idx = beams.findIndex((b) => b.id === beamId);
+    if (idx < 0) return;
+
+    if (e.shiftKey && listAnchorId) {
+      e.preventDefault();
+      const a = beams.findIndex((b) => b.id === listAnchorId);
+      if (a >= 0) {
+        const lo = Math.min(a, idx);
+        const hi = Math.max(a, idx);
+        const ids = beams.slice(lo, hi + 1).map((b) => b.id);
+        setListSelectedIds(ids);
+        setBeamMultiSelect([]);
+        const first = beams[lo];
+        const segs = beamSegments(project, first);
+        setPlanSelection(
+          segs[0] ? { kind: "beam", beamId: first.id, segIndex: segs[0].index } : null,
+        );
+        return;
+      }
+    }
+
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      setListSelectedIds((prev) => {
+        if (prev.includes(beamId)) return prev.filter((id) => id !== beamId);
+        return [...prev, beamId];
+      });
+      setListAnchorId(beamId);
+      setBeamMultiSelect([]);
+      const beam = beams[idx];
+      const segs = beamSegments(project, beam);
+      if (segs[0]) setPlanSelection({ kind: "beam", beamId, segIndex: segs[0].index });
+      return;
+    }
+
+    setListSelectedIds([beamId]);
+    setListAnchorId(beamId);
+    const beam = beams[idx];
+    const segs = beamSegments(project, beam);
+    handlePlanSelect(segs[0] ? { kind: "beam", beamId, segIndex: segs[0].index } : null);
+  }
+
+  function applyBulkBeamName() {
+    const name = bulkBeamName.trim();
+    if (!name) return;
+    const fromList = listSelectedIds;
+    const fromPlan = [...new Set(beamMultiSelect.map((s) => s.beamId))];
+    const ids = fromList.length > 0 ? fromList : fromPlan;
+    if (ids.length === 0) {
+      setStatus("Chọn dầm trên danh sách hoặc đoạn dầm trên bản vẽ (Ctrl/Shift) rồi gán tên.");
+      return;
+    }
+    let next = project;
+    for (const id of ids) {
+      next = patchBeam(next, id, { name });
+    }
+    persist(next);
+    setStatus(`Đã gán tên «${name}» cho ${ids.length} dầm.`);
+    setBulkBeamName("");
   }
 
   useEffect(() => {
@@ -1081,81 +1219,105 @@ export function SlabApp() {
                       </Button>
                     </div>
                   </div>
+                  <p className="mb-1.5 text-[10px] text-zinc-500">
+                    Một dòng / loại dầm (D1, D2…). Shift+click chọn dải; Ctrl+click chọn từng dầm / đoạn trên bản vẽ để gán tên.
+                  </p>
                   <div className="max-h-64 space-y-1.5 overflow-auto">
                     {(project.beams ?? []).length === 0 && (
                       <p className="text-[11px] text-zinc-500">Chưa có dầm. Thêm dầm hoặc nhập số lượng ở trên.</p>
                     )}
-                    {(project.beams ?? []).flatMap((b) => {
+                    {sortedPlanBeams().map((b) => {
                       const segs = beamSegments(project, b);
-                      if (segs.length === 0) {
-                        return [
-                          <div
-                            key={b.id}
-                            className="flex flex-wrap items-center gap-1.5 rounded border border-zinc-700 px-1.5 py-1"
+                      const selected = listSelectedIds.includes(b.id);
+                      const totalL = segs.reduce((s, seg) => s + seg.span, 0);
+                      return (
+                        <div
+                          key={b.id}
+                          className={`flex flex-wrap items-center gap-1.5 rounded border px-1.5 py-1 ${
+                            selected ? "border-emerald-600 bg-emerald-950/40" : "border-zinc-700"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 text-left text-xs text-zinc-200 hover:text-sky-300"
+                            onClick={(e) => handleListBeamClick(b.id, e)}
                           >
-                            <span className="min-w-0 flex-1 text-xs text-zinc-400">
-                              {b.name} · {b.direction === "Y" ? "đứng" : "ngang"} · chưa có đoạn
-                            </span>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              className="px-1"
-                              onClick={() => persist(removeBeam(project, b.id))}
-                            >
-                              <Trash2 />
-                            </Button>
-                          </div>,
-                        ];
-                      }
-                      return segs.map((seg) => {
-                        const selected =
-                          planSelection?.kind === "beam" &&
-                          planSelection.beamId === b.id &&
-                          planSelection.segIndex === seg.index;
-                        return (
-                          <div
-                            key={`${b.id}-s${seg.index}`}
-                            className={`flex flex-wrap items-center gap-1.5 rounded border px-1.5 py-1 ${
-                              selected ? "border-emerald-600 bg-emerald-950/40" : "border-zinc-700"
-                            }`}
+                            {b.name || "(không tên)"} · {b.direction === "Y" ? "đứng" : "ngang"}
+                            {segs.length > 0
+                              ? ` · ${segs.length} đoạn · ΣL=${Math.round(totalL)}`
+                              : " · chưa có đoạn"}
+                          </button>
+                          <Input
+                            className="w-16"
+                            title="Tên dầm"
+                            value={b.name}
+                            onChange={(e) => persist(patchBeam(project, b.id, { name: e.target.value }))}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Input
+                            type="number"
+                            className="w-20"
+                            title="Vị trí tim dầm (mm)"
+                            value={Math.round(b.axis)}
+                            onChange={(e) =>
+                              persist(patchBeam(project, b.id, { axis: Number(e.target.value) || 0 }))
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            className="px-1"
+                            onClick={() => {
+                              if (planSelection?.kind === "beam" && planSelection.beamId === b.id) {
+                                setPlanSelection(null);
+                              }
+                              setListSelectedIds((prev) => prev.filter((id) => id !== b.id));
+                              setBeamMultiSelect((prev) => prev.filter((s) => s.beamId !== b.id));
+                              persist(removeBeam(project, b.id));
+                            }}
                           >
-                            <button
-                              type="button"
-                              className="min-w-0 flex-1 text-left text-xs text-zinc-200 hover:text-sky-300"
-                              onClick={() =>
-                                handlePlanSelect({ kind: "beam", beamId: b.id, segIndex: seg.index })
-                              }
-                            >
-                              {b.name} · {seg.a0.name}–{seg.a1.name} · {b.direction === "Y" ? "đứng" : "ngang"} · L=
-                              {Math.round(seg.span)}
-                            </button>
-                            <Input
-                              type="number"
-                              className="w-20"
-                              title="Vị trí tim dầm (mm)"
-                              value={Math.round(b.axis)}
-                              onChange={(e) =>
-                                persist(patchBeam(project, b.id, { axis: Number(e.target.value) || 0 }))
-                              }
-                            />
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              className="px-1"
-                              onClick={() => {
-                                if (planSelection?.kind === "beam" && planSelection.beamId === b.id) {
-                                  setPlanSelection(null);
-                                }
-                                persist(removeBeam(project, b.id));
-                              }}
-                            >
-                              <Trash2 />
-                            </Button>
-                          </div>
-                        );
-                      });
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      );
                     })}
                   </div>
+                  {(listSelectedIds.length > 1 ||
+                    new Set(beamMultiSelect.map((s) => s.beamId)).size > 1 ||
+                    beamMultiSelect.length > 1) && (
+                    <div className="mt-2 flex flex-wrap items-end gap-2 rounded border border-amber-800/50 bg-amber-950/20 p-2">
+                      <Field label="Gán tên dầm đã chọn" wide>
+                        <Input
+                          value={bulkBeamName}
+                          placeholder="VD: D1"
+                          onChange={(e) => setBulkBeamName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") applyBulkBeamName();
+                          }}
+                        />
+                      </Field>
+                      <Button size="sm" variant="success" onClick={applyBulkBeamName}>
+                        <Check /> Gán tên
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setListSelectedIds([]);
+                          setBeamMultiSelect([]);
+                          setBulkBeamName("");
+                        }}
+                      >
+                        Bỏ chọn nhiều
+                      </Button>
+                      <p className="w-full text-[10px] text-zinc-500">
+                        {listSelectedIds.length > 0
+                          ? `${listSelectedIds.length} dầm trên danh sách`
+                          : `${beamMultiSelect.length} đoạn trên bản vẽ`}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
@@ -1189,7 +1351,7 @@ export function SlabApp() {
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <div className="text-xs font-semibold text-sky-300">Dầm đang chọn</div>
-                      <Button size="sm" variant="secondary" onClick={() => setPlanSelection(null)}>
+                      <Button size="sm" variant="secondary" onClick={clearPlanSelection}>
                         Bỏ chọn
                       </Button>
                     </div>
@@ -1842,6 +2004,7 @@ export function SlabApp() {
               show3d={project.show3d && tab === "model3d"}
               interactive={tab === "plan" || tab === "axes" || tab === "beams" || tab === "draw"}
               selection={planSelection}
+              beamMultiSelect={beamMultiSelect}
               onSelect={handlePlanSelect}
             />
           </div>
