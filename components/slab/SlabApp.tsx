@@ -2193,70 +2193,41 @@ export function SlabApp() {
           )}
 
           {tab === "simple2" && (
-            <div className="flex flex-col gap-3">
-              <Panel title="Bố trí thép 2 lớp đơn giản" className="min-w-0 flex-1">
-                <div className="flex flex-col gap-2.5">
-                  <Field label="Thép lớp dưới">
-                    <Input
-                      value={project.simple2.bottomSpec}
-                      onChange={(e) => persist({ ...project, simple2: { ...project.simple2, bottomSpec: e.target.value } })}
-                    />
-                  </Field>
-                  <Field label="Móc thép dưới" unit="mm">
-                    <Input
-                      type="number"
-                      value={project.simple2.bottomHook}
-                      onChange={(e) => persist({ ...project, simple2: { ...project.simple2, bottomHook: Number(e.target.value) || 0 } })}
-                    />
-                  </Field>
-                  <Field label="Thép lớp trên">
-                    <Input
-                      value={project.simple2.topSpec}
-                      onChange={(e) => persist({ ...project, simple2: { ...project.simple2, topSpec: e.target.value } })}
-                    />
-                  </Field>
-                  <Field label="Móc thép trên" unit="mm">
-                    <Input
-                      type="number"
-                      value={project.simple2.topHook}
-                      onChange={(e) => persist({ ...project, simple2: { ...project.simple2, topHook: Number(e.target.value) || 0 } })}
-                    />
-                  </Field>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" variant="secondary" onClick={assignAllBeams}>
-                    Copy Mặt bằng dầm
-                  </Button>
-                  <Button size="sm" variant="secondary" className="text-amber-300" onClick={applySimple2}>
-                    Thép lớp dưới / trên
-                  </Button>
-                </div>
-              </Panel>
-              <Panel title="Mặt cắt" className="w-64">
-                <Field label="Tên mặt cắt">
+            <Panel title="Bố trí thép 2 lớp đơn giản" className="min-w-0 flex-1">
+              <div className="flex flex-col gap-2.5">
+                <Field label="Thép lớp dưới">
                   <Input
-                    value={project.sections[0]?.name ?? "1"}
-                    onChange={(e) => {
-                      const sections = [...project.sections];
-                      if (!sections[0]) return;
-                      sections[0] = { ...sections[0], name: e.target.value };
-                      persist({ ...project, sections });
-                    }}
+                    value={project.simple2.bottomSpec}
+                    onChange={(e) => persist({ ...project, simple2: { ...project.simple2, bottomSpec: e.target.value } })}
                   />
                 </Field>
-                <Button
-                  size="sm"
-                  className="mt-3 w-full text-emerald-400"
-                  variant="secondary"
-                  onClick={() => {
-                    setTab("section");
-                    setStatus("Đã tạo mặt cắt sàn.");
-                  }}
-                >
-                  Tạo mặt cắt sàn
+                <Field label="Móc thép dưới" unit="mm">
+                  <Input
+                    type="number"
+                    value={project.simple2.bottomHook}
+                    onChange={(e) => persist({ ...project, simple2: { ...project.simple2, bottomHook: Number(e.target.value) || 0 } })}
+                  />
+                </Field>
+                <Field label="Thép lớp trên">
+                  <Input
+                    value={project.simple2.topSpec}
+                    onChange={(e) => persist({ ...project, simple2: { ...project.simple2, topSpec: e.target.value } })}
+                  />
+                </Field>
+                <Field label="Móc thép trên" unit="mm">
+                  <Input
+                    type="number"
+                    value={project.simple2.topHook}
+                    onChange={(e) => persist({ ...project, simple2: { ...project.simple2, topHook: Number(e.target.value) || 0 } })}
+                  />
+                </Field>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" className="text-amber-300" onClick={applySimple2}>
+                  Thép lớp dưới / trên
                 </Button>
-              </Panel>
-            </div>
+              </div>
+            </Panel>
           )}
 
           {tab === "section" && (
