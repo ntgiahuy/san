@@ -96,6 +96,8 @@ export function SlabApp() {
   const [planSelection, setPlanSelection] = useState<PlanSelection | null>(null);
   const [axisDirTab, setAxisDirTab] = useState<"X" | "Y">("X");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sidePanelRef = useRef<HTMLDivElement>(null);
+  const selectedBeamPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -332,10 +334,20 @@ export function SlabApp() {
   function handlePlanSelect(sel: PlanSelection | null) {
     setPlanSelection(sel);
     if (!sel) return;
-    if (sel.kind === "beam") setTab("beams");
-    else if (sel.kind === "bay") setTab("plan");
+    if (sel.kind === "beam") {
+      setTab("beams");
+    } else if (sel.kind === "bay") setTab("plan");
     else if (sel.kind === "axis") setTab("axes");
   }
+
+  useEffect(() => {
+    if (tab !== "beams" || planSelection?.kind !== "beam") return;
+    const id = window.setTimeout(() => {
+      sidePanelRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      selectedBeamPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [tab, planSelection]);
 
   /** Tiếp theo: dịch chọn dầm/ô sàn từ trái sang phải (lặp lại). */
   function selectNextPlanItem() {
@@ -660,7 +672,7 @@ export function SlabApp() {
       </nav>
 
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(140px,32vh)_minmax(0,1fr)] lg:grid-rows-1 lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
-        <div className="min-h-0 overflow-auto border-b border-zinc-800 bg-zinc-900 p-3 lg:border-b-0 lg:border-r">
+        <div ref={sidePanelRef} className="min-h-0 overflow-auto border-b border-zinc-800 bg-zinc-900 p-3 lg:border-b-0 lg:border-r">
           {tab === "plan" && (
             <div className="flex flex-col gap-3">
               <Panel title="1. Thông tin sàn" className="min-w-0 w-full">
@@ -981,6 +993,63 @@ export function SlabApp() {
           {tab === "beams" && (
             <div className="flex flex-col gap-3">
               <Panel title="3. Số liệu dầm" className="min-w-0 w-full">
+                {planSelection?.kind === "beam" && selectedBeamInfo() && (
+                  <div
+                    ref={selectedBeamPanelRef}
+                    className="mb-3 rounded border border-sky-700/60 bg-sky-950/30 p-2"
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="text-xs font-semibold text-sky-300">Dầm đang chọn</div>
+                      <Button size="sm" variant="secondary" onClick={() => setPlanSelection(null)}>
+                        Bỏ chọn
+                      </Button>
+                    </div>
+                    <p className="mb-2 text-[11px] text-zinc-400">{selectedBeamInfo()!.name}</p>
+                    <div className="flex flex-col gap-2.5">
+                      <Field label="Khoảng cách L" unit="mm">
+                        <Input
+                          type="number"
+                          value={Math.round(selectedBeamInfo()!.length)}
+                          onChange={(e) => patchSelectedBeamLength(Number(e.target.value))}
+                        />
+                      </Field>
+                      <Field label="Chiều cao H" unit="mm">
+                        <Input
+                          type="number"
+                          value={selectedBeamInfo()!.H}
+                          onChange={(e) => patchSelectedBeamDims({ beamH: Number(e.target.value) || 0 })}
+                        />
+                      </Field>
+                      <Field label="Chiều rộng B" unit="mm">
+                        <Input
+                          type="number"
+                          value={selectedBeamInfo()!.B}
+                          onChange={(e) => patchSelectedBeamDims({ beamB: Number(e.target.value) || 0 })}
+                        />
+                      </Field>
+                      <Field label="Lệch trục B1" unit="mm">
+                        <Input
+                          type="number"
+                          value={selectedBeamInfo()!.B1}
+                          onChange={(e) => patchSelectedBeamDims({ beamB1: Number(e.target.value) || 0 })}
+                        />
+                      </Field>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="success"
+                        size="sm"
+                        title="Chọn đoạn dầm tiếp theo (trái → phải)"
+                        onClick={selectNextPlanItem}
+                      >
+                        <ChevronRight /> Tiếp theo
+                      </Button>
+                      <Button variant="success" size="sm" onClick={applySelectionToAllSpans}>
+                        <Check /> Áp dụng cho các nhịp
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-col gap-2.5">
                   <Field label="Tên dầm" wide>
                     <Input
@@ -1123,87 +1192,6 @@ export function SlabApp() {
                     })}
                   </div>
                 </div>
-                {(planSelection?.kind === "bay" || planSelection?.kind === "beam") && (
-                  <div className="mt-3 rounded border border-sky-700/60 bg-sky-950/30 p-2">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <div className="text-xs font-semibold text-sky-300">
-                        {planSelection.kind === "bay" ? "Ô sàn đang chọn" : "Dầm đang chọn"}
-                      </div>
-                      <Button size="sm" variant="secondary" onClick={() => setPlanSelection(null)}>
-                        Bỏ chọn
-                      </Button>
-                    </div>
-                    {planSelection.kind === "bay" && selectedBaySpans() && (
-                      <>
-                        <p className="mb-2 text-[11px] text-zinc-400">{selectedBaySpans()!.name}</p>
-                        <div className="flex flex-col gap-2.5">
-                          <Field label="Khoảng cách Lx" unit="mm">
-                            <Input
-                              type="number"
-                              value={Math.round(selectedBaySpans()!.lx)}
-                              onChange={(e) => patchSelectedBaySpan("lx", Number(e.target.value))}
-                            />
-                          </Field>
-                          <Field label="Khoảng cách Ly" unit="mm">
-                            <Input
-                              type="number"
-                              value={Math.round(selectedBaySpans()!.ly)}
-                              onChange={(e) => patchSelectedBaySpan("ly", Number(e.target.value))}
-                            />
-                          </Field>
-                        </div>
-                      </>
-                    )}
-                    {planSelection.kind === "beam" && selectedBeamInfo() && (
-                      <>
-                        <p className="mb-2 text-[11px] text-zinc-400">{selectedBeamInfo()!.name}</p>
-                        <div className="flex flex-col gap-2.5">
-                          <Field label="Khoảng cách L" unit="mm">
-                            <Input
-                              type="number"
-                              value={Math.round(selectedBeamInfo()!.length)}
-                              onChange={(e) => patchSelectedBeamLength(Number(e.target.value))}
-                            />
-                          </Field>
-                          <Field label="Chiều cao H" unit="mm">
-                            <Input
-                              type="number"
-                              value={selectedBeamInfo()!.H}
-                              onChange={(e) => patchSelectedBeamDims({ beamH: Number(e.target.value) || 0 })}
-                            />
-                          </Field>
-                          <Field label="Chiều rộng B" unit="mm">
-                            <Input
-                              type="number"
-                              value={selectedBeamInfo()!.B}
-                              onChange={(e) => patchSelectedBeamDims({ beamB: Number(e.target.value) || 0 })}
-                            />
-                          </Field>
-                          <Field label="Lệch trục B1" unit="mm">
-                            <Input
-                              type="number"
-                              value={selectedBeamInfo()!.B1}
-                              onChange={(e) => patchSelectedBeamDims({ beamB1: Number(e.target.value) || 0 })}
-                            />
-                          </Field>
-                        </div>
-                      </>
-                    )}
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="success"
-                        size="sm"
-                        title="Chọn đoạn dầm / ô sàn tiếp theo (trái → phải)"
-                        onClick={selectNextPlanItem}
-                      >
-                        <ChevronRight /> Tiếp theo
-                      </Button>
-                      <Button variant="success" size="sm" onClick={applySelectionToAllSpans}>
-                        <Check /> Áp dụng cho các nhịp
-                      </Button>
-                    </div>
-                  </div>
-                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     variant="success"
@@ -1604,7 +1592,7 @@ export function SlabApp() {
         </div>
 
         <div className="flex min-h-0 flex-col overflow-hidden">
-          {(tab === "axes" || tab === "beams" || tab === "draw") && (
+          {(tab === "axes" || tab === "draw") && (
             <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/80 px-3 py-2">
               {!planSelection && (
                 <div className="mb-1 text-[11px] text-zinc-500">
