@@ -470,6 +470,13 @@ export function SlabApp() {
       setStatus("Chọn loại dầm trên danh sách (hoặc nhập tên) rồi bấm Chèn dầm.");
       return;
     }
+    // Đã chọn sẵn ô sàn → chèn ngay
+    if (planSelection?.kind === "bay") {
+      setInsertBeamMode(true);
+      setTab("beams");
+      insertBeamAtBay(planSelection.ix, planSelection.iy);
+      return;
+    }
     setInsertBeamMode(true);
     setTab("beams");
     setStatus(
@@ -478,7 +485,7 @@ export function SlabApp() {
         insertMethodY ? "Phương Y" : null,
       ]
         .filter(Boolean)
-        .join(" + ")}) — click ô sàn trên bản vẽ. Bấm lại Chèn dầm để hủy.`,
+        .join(" + ")}) — click vào Ô SÀN trên bản vẽ (không click vào thân dầm). Bấm lại Chèn dầm để hủy.`,
     );
   }
 
@@ -506,7 +513,9 @@ export function SlabApp() {
     persist(next);
     const added = next.beams.filter((b) => !(project.beams ?? []).some((o) => o.id === b.id));
     if (added.length === 0) {
-      setStatus("Không chèn được — ô quá hẹp hoặc đã có trục. Thử ô khác / khoảng cách khác.");
+      setStatus(
+        "Không chèn được — ô đã đầy dầm/trục hoặc quá hẹp. Thử ô khác, bỏ tick một phương, hoặc nhập khoảng cách trục khác «Giữa ô».",
+      );
       return;
     }
     const last = added[added.length - 1];
@@ -518,8 +527,10 @@ export function SlabApp() {
         setBeamMultiSelect([{ beamId: last.id, segIndex: mid.index }]);
       }
     }
+    const nBayX = Math.max(0, (next.axesX?.length ?? 1) - 1);
+    const nBayY = Math.max(0, (next.axesY?.length ?? 1) - 1);
     setStatus(
-      `Đã chèn dầm «${type.name}» vào giữa ô (không thêm trục) — chỉnh L đoạn hoặc khoảng cách trục trước lần chèn sau. Vẫn đang chèn: click ô khác hoặc bấm Chèn dầm để hủy.`,
+      `Đã chèn dầm «${type.name}» — thêm trục lưới, tách thành ${nBayX}×${nBayY} ô độc lập. Vẫn đang chèn: click ô khác hoặc bấm Chèn dầm để hủy.`,
     );
   }
 
@@ -1605,7 +1616,7 @@ export function SlabApp() {
                         size="sm"
                         variant={insertBeamMode ? "success" : "secondary"}
                         className={insertBeamMode ? "ring-1 ring-emerald-400" : undefined}
-                        title="Chọn loại dầm + Phương X/Y, bấm Chèn dầm, rồi click ô sàn (không cần phím)"
+                        title="Chọn loại dầm + Phương X/Y, bấm Chèn dầm, rồi click ô sàn — thêm trục để tách ô độc lập"
                         onClick={toggleInsertBeamMode}
                       >
                         <Plus /> Chèn dầm
@@ -1659,8 +1670,8 @@ export function SlabApp() {
                         })()}
                         {" · "}
                         {insertBeamMode
-                          ? "Đang chèn — click ô sàn (không cần phím, không thêm trục)."
-                          : "Click đoạn rồi Gán tên (không cần phím). Shift/Ctrl chỉ khi chọn nhiều — hoặc Chèn dầm vào giữa ô."}
+                          ? "Đang chèn — click Ô SÀN (không click thân dầm). Mỗi dầm thêm 1 trục → tách ô độc lập (X+Y → 4 ô)."
+                          : "Click đoạn rồi Gán tên (không cần phím). Shift/Ctrl chỉ khi chọn nhiều — hoặc Chèn dầm giữa ô để tách ô."}
                       </p>
                     </div>
                   )}
@@ -2377,6 +2388,7 @@ export function SlabApp() {
               project={project}
               show3d={project.show3d && tab === "model3d"}
               interactive={tab === "plan" || tab === "axes" || tab === "beams" || tab === "draw"}
+              insertBeamMode={insertBeamMode}
               selection={planSelection}
               beamMultiSelect={beamMultiSelect}
               onSelect={handlePlanSelect}

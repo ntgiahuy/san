@@ -1712,10 +1712,10 @@ export function insertSlabBayY(project: SlabProject, spanMm = 3000): SlabProject
 }
 
 /**
- * Chèn dầm vào giữa ô sàn (ix, iy) — không thêm trục lưới.
- * method "X" (UI Phương X) = dầm đứng giữa hai trục X của ô.
- * method "Y" (UI Phương Y) = dầm ngang giữa hai trục Y của ô.
- * `splitMm`: khoảng từ mép đầu ô đến tim dầm mới (mặc định giữa ô).
+ * Chèn dầm vào giữa ô sàn (ix, iy) — thêm trục lưới để tách ô độc lập.
+ * method "X" → dầm đứng + trục X mới (1 ô → 2 ô).
+ * method "Y" → dầm ngang + trục Y mới (1 ô → 2 ô).
+ * Cả X và Y → 4 ô. `splitMm`: khoảng từ mép đầu ô đến tim (mặc định giữa ô).
  */
 export function insertBeamInBay(
   project: SlabProject,
@@ -1735,9 +1735,21 @@ export function insertBeamInBay(
   const bw = parsed.b;
   const name = (type.name || "").trim() || "D";
   const offset = Number.isFinite(type.offset) ? Math.round(type.offset) : Math.round(bw / 2);
+  const minGap = Math.max(bw + 40, 120);
+
+  const pickPos = (a0: number, a1: number, preferredFromStart: number, occupied: number[]) => {
+    const span = a1 - a0;
+    if (span < 100) return null as number | null;
+    const fracs = [0.5, 0.35, 0.65, 0.25, 0.75, 0.4, 0.6];
+    const candidates = [preferredFromStart, ...fracs.map((t) => Math.round(span * t))];
+    for (const fromStart of candidates) {
+      const pos = Math.min(a1 - 50, Math.max(a0 + 50, a0 + fromStart));
+      if (occupied.every((p) => Math.abs(p - pos) >= minGap)) return pos;
+    }
+    return null;
+  };
 
   if (method === "X") {
-    // Dầm đứng giữa ô: tim giữa axesX[ix] .. axesX[ix+1], không thêm trục
     const a0 = axesX[ix];
     const a1 = axesX[ix + 1];
     const span = a1.pos - a0.pos;
@@ -1746,26 +1758,33 @@ export function insertBeamInBay(
       splitMm !== undefined && Number.isFinite(splitMm)
         ? Math.round(splitMm)
         : Math.round(span / 2);
-    const pos = Math.min(a1.pos - 50, Math.max(a0.pos + 50, a0.pos + fromLeft));
-    // Tránh trùng tim dầm / trục đã có
-    const taken = (base.beams ?? [])
-      .filter((b) => b.direction === "Y")
-      .some((b) => Math.abs(b.axis - pos) < 1);
-    if (taken || axesX.some((a) => Math.abs(a.pos - pos) < 1)) return project;
+    const occupied = axesX.map((a) => a.pos);
+    const pos = pickPos(a0.pos, a1.pos, fromLeft, occupied);
+    if (pos === null) return project;
 
+    const neu: GridAxis = { id: uid("ax"), name: nextAxisNameX(axesX), pos };
+    const nextX = sortAxes([...axesX, neu]);
+    const axisIdx = nextX.findIndex((a) => a.id === neu.id);
     const beam: PlanBeam = {
       id: uid("beam"),
       name,
       size: formatBeamSize(parsed.b, parsed.h),
       direction: "Y",
-      axis: pos,
-      free: true,
+      axis: neu.pos,
+      axisId: neu.id,
       start: 0,
       end: Hplan,
-      offset,
+      offset: beamOffsetForAxisIndex(bw, axisIdx, nextX.length),
     };
-    const beams = [...(base.beams ?? []), beam];
-    const next = syncBeamsToAxes({ ...base, beams });
+    if (Number.isFinite(type.offset) && axisIdx > 0 && axisIdx < nextX.length - 1) {
+      beam.offset = offset;
+    }
+    // Bỏ dầm free trùng vị trí (chèn trước đó chưa tách ô)
+    const kept = (base.beams ?? []).filter(
+      (b) => !(b.free && b.direction === "Y" && Math.abs(b.axis - pos) < minGap),
+    );
+    const beams = [...kept, beam];
+    const next = applyAxesToProject({ ...base, axesX: nextX, beams });
     return {
       ...next,
       info: syncBeamInfo({
@@ -1776,7 +1795,7 @@ export function insertBeamInBay(
     };
   }
 
-  // Phương Y: dầm ngang giữa ô — không thêm trục Y
+  // Phương Y: dầm ngang + trục Y mới → tách ô theo chiều cao
   const a0 = axesY[iy];
   const a1 = axesY[iy + 1];
   const span = a1.pos - a0.pos;
@@ -1785,25 +1804,32 @@ export function insertBeamInBay(
     splitMm !== undefined && Number.isFinite(splitMm)
       ? Math.round(splitMm)
       : Math.round(span / 2);
-  const pos = Math.min(a1.pos - 50, Math.max(a0.pos + 50, a0.pos + fromBottom));
-  const taken = (base.beams ?? [])
-    .filter((b) => b.direction === "X")
-    .some((b) => Math.abs(b.axis - pos) < 1);
-  if (taken || axesY.some((a) => Math.abs(a.pos - pos) < 1)) return project;
+  const occupied = axesY.map((a) => a.pos);
+  const pos = pickPos(a0.pos, a1.pos, fromBottom, occupied);
+  if (pos === null) return project;
 
+  const neu: GridAxis = { id: uid("ay"), name: nextAxisNameY(axesY), pos };
+  const nextY = sortAxes([...axesY, neu]);
+  const axisIdx = nextY.findIndex((a) => a.id === neu.id);
   const beam: PlanBeam = {
     id: uid("beam"),
     name,
     size: formatBeamSize(parsed.b, parsed.h),
     direction: "X",
-    axis: pos,
-    free: true,
+    axis: neu.pos,
+    axisId: neu.id,
     start: 0,
     end: W,
-    offset,
+    offset: beamOffsetForAxisIndex(bw, axisIdx, nextY.length),
   };
-  const beams = [...(base.beams ?? []), beam];
-  const next = syncBeamsToAxes({ ...base, beams });
+  if (Number.isFinite(type.offset) && axisIdx > 0 && axisIdx < nextY.length - 1) {
+    beam.offset = offset;
+  }
+  const kept = (base.beams ?? []).filter(
+    (b) => !(b.free && b.direction === "X" && Math.abs(b.axis - pos) < minGap),
+  );
+  const beams = [...kept, beam];
+  const next = applyAxesToProject({ ...base, axesY: nextY, beams });
   return {
     ...next,
     info: syncBeamInfo({

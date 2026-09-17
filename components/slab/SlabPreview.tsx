@@ -40,6 +40,7 @@ export function SlabPreview({
   beamMultiSelect = [],
   onSelect,
   interactive = false,
+  insertBeamMode = false,
   editPanel = null,
 }: {
   project: SlabProject;
@@ -50,6 +51,8 @@ export function SlabPreview({
   onSelect?: (sel: PlanSelection | null, e?: MouseEvent) => void;
   /** Cho phép nhấp chọn ô sàn / đoạn dầm / số hiệu trục trên bản vẽ. */
   interactive?: boolean;
+  /** Đang chèn dầm vào ô — ưu tiên click ô sàn, không bắt sự kiện trên thân dầm. */
+  insertBeamMode?: boolean;
   /** Bảng chỉnh sửa kích thước hiển thị tại vị trí chọn. */
   editPanel?: ReactNode;
 }) {
@@ -194,7 +197,7 @@ export function SlabPreview({
             fill={active ? "rgba(56,189,248,0.18)" : interactive ? "rgba(39,39,42,0.35)" : "transparent"}
             stroke={active ? "#38bdf8" : "transparent"}
             strokeWidth={active ? 1.6 : 0}
-            className={interactive ? "cursor-pointer" : undefined}
+            className={interactive ? (insertBeamMode ? "cursor-crosshair" : "cursor-pointer") : undefined}
             pointerEvents={interactive ? "all" : "none"}
             onClick={(e) => {
               if (!interactive || !onSelect) return;
@@ -357,10 +360,10 @@ export function SlabPreview({
             fill="#27272a"
             stroke="#a1a1aa"
             strokeWidth={1}
-            className={interactive ? "cursor-pointer" : undefined}
-            pointerEvents={interactive ? "all" : "none"}
+            className={interactive && !insertBeamMode ? "cursor-pointer" : undefined}
+            pointerEvents={interactive && !insertBeamMode ? "all" : "none"}
             onClick={(e) => {
-              if (!interactive || !onSelect) return;
+              if (!interactive || insertBeamMode || !onSelect) return;
               e.stopPropagation();
               pick({ kind: "beam", beamId: beam.id, segIndex: seg.index }, e);
             }}
@@ -412,7 +415,9 @@ export function SlabPreview({
 
   const statusText = !interactive
     ? `${project.info.name} · ${project.beams.length} dầm · ${axesX.length - 1}×${axesY.length - 1} ô`
-    : !selection
+    : insertBeamMode
+      ? "Đang chèn dầm — click vào ô sàn (vùng giữa các dầm trên bản vẽ)."
+      : !selection
       ? "Nhấp ô sàn, dầm hoặc số hiệu trục trên bản vẽ để chỉnh kích thước tại chỗ."
       : selection.kind === "bay"
         ? `Ô sàn: ${axesX[selection.ix]?.name ?? "?"}–${axesX[selection.ix + 1]?.name ?? "?"} / ${axesY[selection.iy]?.name ?? "?"}–${axesY[selection.iy + 1]?.name ?? "?"}`
