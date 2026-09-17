@@ -19,7 +19,7 @@ type Anchor = { leftPct: number; topPct: number };
 /** Bán kính vòng số hiệu trục (px SVG). */
 const AXIS_BUBBLE_R = 11;
 /** Khoảng hở giữa da dầm ngoài và vòng số hiệu. */
-const AXIS_BUBBLE_GAP = 18;
+const AXIS_BUBBLE_GAP = 22;
 /** Tâm vòng số hiệu cách da dầm ngoài. */
 const AXIS_BUBBLE_OFFSET = AXIS_BUBBLE_R + AXIS_BUBBLE_GAP;
 
