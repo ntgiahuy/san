@@ -1490,7 +1490,7 @@ export function SlabApp() {
                   <p className="mb-1.5 text-[10px] text-zinc-500">
                     Mỗi dòng: tên · H · B. Click đoạn để Gán tên (không cần phím); Shift/Ctrl chỉ khi chọn nhiều; hoặc Chèn dầm vào giữa ô.
                   </p>
-                  <div className="mb-1.5 grid grid-cols-[minmax(3rem,1fr)_4.5rem_4.5rem_1.75rem] items-center gap-1.5 px-1.5 text-[10px] text-zinc-500">
+                  <div className="mb-1.5 grid grid-cols-[minmax(2.5rem,1fr)_4rem_4rem_1.75rem] items-center gap-1.5 px-1.5 text-[10px] text-zinc-500">
                     <span className="truncate">Tên dầm</span>
                     <span className="text-center">H</span>
                     <span className="text-center">B</span>
@@ -1519,7 +1519,7 @@ export function SlabApp() {
                               handleListTypeClick(t.id, e as unknown as ReactMouseEvent);
                             }
                           }}
-                          className={`grid cursor-pointer grid-cols-[minmax(3rem,1fr)_4.5rem_4.5rem_1.75rem] items-center gap-1.5 rounded border px-1.5 py-1 ${
+                          className={`grid cursor-pointer grid-cols-[minmax(2.5rem,1fr)_4rem_4rem_1.75rem] items-center gap-1.5 rounded border px-1.5 py-1 ${
                             selected ? "border-emerald-600 bg-emerald-950/40" : "border-zinc-700"
                           }`}
                         >
