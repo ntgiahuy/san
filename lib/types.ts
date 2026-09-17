@@ -70,6 +70,10 @@ export interface PlanBeam {
    * s0 ≠ s1 → dầm xéo.
    */
   segShifts?: BeamSegShift[];
+  /**
+   * Đoạn đã xóa (không vẽ, ô sàn hai bên coi như liền): khóa `${a0.id}|${a1.id}`.
+   */
+  omitSegKeys?: string[];
 }
 
 /** Dịch đoạn dầm tại hai đầu (mm). */

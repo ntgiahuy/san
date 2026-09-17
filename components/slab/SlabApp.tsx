@@ -35,6 +35,7 @@ import {
   beamSegments,
   bumpBeamTypeName,
   equalizeAxisSpans,
+  isBeamSegOmitted,
   patchBeam,
   patchBeamOnAxis,
   patchBeamSegShift,
@@ -44,7 +45,7 @@ import {
   rectNearlyEquals,
   removeAxis,
   removeBeam,
-  removeBeamMergingAdjacentBays,
+  removeBeamSegments,
   removeBeamType,
   renameAxis,
   setAxisSpan,
@@ -269,16 +270,23 @@ export function SlabApp() {
     persist(patchBeamSegShift(project, planSelection.beamId, planSelection.segIndex, patch));
   }
 
-  /** Xóa dầm đang chọn; trục giữa → gộp 2 ô sàn kề hai bên. */
+  /** Xóa đoạn dầm đang chọn (Shift/Ctrl chọn nhiều đoạn). */
   function deleteSelectedBeam() {
-    if (planSelection?.kind !== "beam") return;
-    const beam = project.beams.find((b) => b.id === planSelection.beamId);
-    if (!beam) return;
-    const name = beam.name || planSelection.beamId;
-    const next = removeBeamMergingAdjacentBays(project, planSelection.beamId);
+    const targets =
+      beamMultiSelect.length > 0
+        ? beamMultiSelect
+        : planSelection?.kind === "beam"
+          ? [{ beamId: planSelection.beamId, segIndex: planSelection.segIndex }]
+          : [];
+    if (targets.length === 0) return;
+    const next = removeBeamSegments(project, targets);
     clearPlanSelection();
     persist(next);
-    setStatus(`Đã xóa dầm «${name}» — ô sàn hai bên đã gộp (nếu là trục giữa).`);
+    setStatus(
+      targets.length === 1
+        ? "Đã xóa 1 đoạn dầm — ô sàn hai bên đoạn liền nhau."
+        : `Đã xóa ${targets.length} đoạn dầm — ô sàn hai bên mỗi đoạn liền nhau.`,
+    );
   }
 
 
@@ -292,6 +300,7 @@ export function SlabApp() {
     for (const b of beams) {
       const segs = beamSegments(project, b);
       for (const seg of segs) {
+        if (isBeamSegOmitted(b, seg.a0.id, seg.a1.id)) continue;
         list.push({ kind: "beam", beamId: b.id, segIndex: seg.index });
       }
     }
@@ -1500,10 +1509,10 @@ export function SlabApp() {
                         <Button
                           size="sm"
                           variant="danger"
-                          title="Xóa dầm; ô sàn hai bên gộp thành một ô (trục giữa)"
+                          title="Xóa đoạn đang chọn (Shift/Ctrl chọn nhiều đoạn)"
                           onClick={deleteSelectedBeam}
                         >
-                          <Trash2 /> Xóa dầm
+                          <Trash2 /> Xóa đoạn
                         </Button>
                         <Button size="sm" variant="secondary" onClick={clearPlanSelection}>
                           Bỏ chọn

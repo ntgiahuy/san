@@ -14,6 +14,7 @@ import {
   beamDrawRange,
   beamSegSideFaces,
   beamSegments,
+  isBeamSegOmitted,
   planBeamBleed,
   rectDiagonalHatchSegments,
   rectOpeningDiagonals,
@@ -325,6 +326,7 @@ function drawBeam(
   const { lo: fullLo, hi: fullHi } = beamDrawRange(project, b);
 
   for (const seg of segs) {
+    if (isBeamSegOmitted(b, seg.a0.id, seg.a1.id)) continue;
     const { lo0, hi0, lo1, hi1 } = beamSegSideFaces(b, seg.index);
     const lo = seg.lo;
     const hi = seg.hi;

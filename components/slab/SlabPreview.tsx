@@ -9,6 +9,7 @@ import {
   beamSegSideFaces,
   beamSegments,
   getBeamSegShift,
+  isBeamSegOmitted,
   planBeamBleed,
   rectDiagonalHatchSegments,
   rectOpeningDiagonals,
@@ -317,6 +318,7 @@ export function SlabPreview({
     const segs = beamSegments(project, beam);
 
     for (const seg of segs) {
+      if (isBeamSegOmitted(beam, seg.a0.id, seg.a1.id)) continue;
       const active =
         (selection?.kind === "beam" &&
           selection.beamId === beam.id &&
