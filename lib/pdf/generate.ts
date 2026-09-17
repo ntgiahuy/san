@@ -243,7 +243,7 @@ function drawPlan(
     textSimple(ctx, o.name || "Ô", toX((x0 + x1) / 2), toY((y0 + y1) / 2), 6, false, "center");
   }
 
-  // Thép từ dầm biên → dầm biên (trừ lớp BV); cắt tại da dầm / ô thủng / sàn thấp
+  // Thép từ da dầm ngoài biên ± lớp BV; liên tục qua dầm giữa; cắt tại ô thủng / sàn thấp
   const hook = SLAB_REBAR_HOOK_MM;
   for (const bar of stripRebarBarSegments(project, axesX, axesY)) {
     if (bar.dir === "X") {
