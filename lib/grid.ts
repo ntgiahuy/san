@@ -319,35 +319,90 @@ export function syncBeamsToAxes(project: SlabProject): SlabProject {
   return { ...project, beams };
 }
 
-/** Đoạn dầm đứng (phương Y): kéo đầu đến da dầm ngang tại hai đầu. */
+/**
+ * Mặt ngoài dầm tại tọa độ dọc theo thanh — nội suy dịch/xéo theo trục giao.
+ * Không gọi beamSegments (tránh vòng lặp khi tính lo/hi đoạn).
+ */
+export function beamFacesAtAlongDirect(
+  beam: PlanBeam,
+  alongMm: number,
+  perpAxes: GridAxis[],
+): { lo: number; hi: number } {
+  const sorted = sortAxes(perpAxes);
+  const bLo = Math.min(beam.start, beam.end);
+  const bHi = Math.max(beam.start, beam.end);
+  const crosses = sorted.filter((a) => a.pos >= bLo - 0.5 && a.pos <= bHi + 0.5);
+  if (crosses.length < 2) {
+    const { b: bw } = parseSizeStr(beam.size);
+    const b1 = Number.isFinite(beam.offset) ? (beam.offset as number) : bw / 2;
+    const { s0, s1 } = getBeamSegShift(beam, 0);
+    const mid = (s0 + s1) / 2;
+    const lo = beam.axis - b1 + mid;
+    return { lo, hi: lo + bw };
+  }
+  let segIndex = 0;
+  for (let i = 0; i < crosses.length - 1; i++) {
+    const mid = (crosses[i].pos + crosses[i + 1].pos) / 2;
+    if (alongMm < mid) {
+      segIndex = i;
+      break;
+    }
+    segIndex = i;
+  }
+  const a0 = crosses[segIndex];
+  const a1 = crosses[segIndex + 1];
+  return beamSegFacesAtAlong(beam, segIndex, alongMm, a0.pos, a1.pos);
+}
+
+/**
+ * Da dầm trên một trục tại vị trí dọc theo dầm ngược phương (tính lệch/xéo).
+ * Không có dầm trên trục → bề dày 0 tại tim trục.
+ */
+export function axisBeamFacesAtAlong(
+  project: SlabProject,
+  beamDir: PlanBeam["direction"],
+  axis: GridAxis,
+  alongMm: number,
+): { lo: number; hi: number } {
+  const beam = findBeamOnAxis(project, beamDir, axis);
+  if (!beam) return { lo: axis.pos, hi: axis.pos };
+  const perp = sortAxes(beamDir === "Y" ? project.axesY ?? [] : project.axesX ?? []);
+  return beamFacesAtAlongDirect(beam, alongMm, perp);
+}
+
+/** Đoạn dầm đứng (phương Y): kéo đầu đến da dầm ngang tại hai đầu (theo lệch/xéo tại tim X). */
 export function verticalBeamSegExtent(
   project: SlabProject,
   y0: number,
   y1: number,
   axesY: GridAxis[],
+  alongXMm?: number,
 ): { yLo: number; yHi: number } {
   const loAxis = Math.min(y0, y1);
   const hiAxis = Math.max(y0, y1);
   const aLo = axesY.find((a) => Math.abs(a.pos - loAxis) < 0.5) ?? { id: "", name: "", pos: loAxis };
   const aHi = axesY.find((a) => Math.abs(a.pos - hiAxis) < 0.5) ?? { id: "", name: "", pos: hiAxis };
-  const faceLo = beamOuterFaces(loAxis, beamSectionOnAxis(project, "X", aLo));
-  const faceHi = beamOuterFaces(hiAxis, beamSectionOnAxis(project, "X", aHi));
+  const along = Number.isFinite(alongXMm) ? (alongXMm as number) : (loAxis + hiAxis) / 2;
+  const faceLo = axisBeamFacesAtAlong(project, "X", aLo, along);
+  const faceHi = axisBeamFacesAtAlong(project, "X", aHi, along);
   return { yLo: faceLo.lo, yHi: faceHi.hi };
 }
 
-/** Đoạn dầm ngang (phương X): kéo đầu đến da dầm đứng tại hai đầu. */
+/** Đoạn dầm ngang (phương X): kéo đầu đến da dầm đứng tại hai đầu (theo lệch/xéo tại tim Y). */
 export function horizontalBeamSegExtent(
   project: SlabProject,
   x0: number,
   x1: number,
   axesX: GridAxis[],
+  alongYMm?: number,
 ): { xLo: number; xHi: number } {
   const loAxis = Math.min(x0, x1);
   const hiAxis = Math.max(x0, x1);
   const aLo = axesX.find((a) => Math.abs(a.pos - loAxis) < 0.5) ?? { id: "", name: "", pos: loAxis };
   const aHi = axesX.find((a) => Math.abs(a.pos - hiAxis) < 0.5) ?? { id: "", name: "", pos: hiAxis };
-  const faceLo = beamOuterFaces(loAxis, beamSectionOnAxis(project, "Y", aLo));
-  const faceHi = beamOuterFaces(hiAxis, beamSectionOnAxis(project, "Y", aHi));
+  const along = Number.isFinite(alongYMm) ? (alongYMm as number) : (loAxis + hiAxis) / 2;
+  const faceLo = axisBeamFacesAtAlong(project, "Y", aLo, along);
+  const faceHi = axisBeamFacesAtAlong(project, "Y", aHi, along);
   return { xLo: faceLo.lo, xHi: faceHi.hi };
 }
 
@@ -1065,24 +1120,30 @@ export function beamOuterFacesAtAlong(
   axis: GridAxis,
   alongMm: number,
 ): { lo: number; hi: number } {
-  const sec = beamSectionOnAxis(project, beamDir, axis);
-  const base = beamOuterFaces(axis.pos, sec);
   const beam = findBeamOnAxis(project, beamDir, axis);
   if (!beam) return { lo: axis.pos, hi: axis.pos };
-  const segs = beamSegments(project, beam);
-  if (segs.length === 0) return { lo: axis.pos, hi: axis.pos };
-  let seg = segs.find((s) => alongMm >= s.lo - 0.5 && alongMm <= s.hi + 0.5);
-  if (!seg) {
-    seg = segs.reduce((best, s) => {
-      const d = alongMm < s.lo ? s.lo - alongMm : alongMm > s.hi ? alongMm - s.hi : 0;
-      const bd = alongMm < best.lo ? best.lo - alongMm : alongMm > best.hi ? alongMm - best.hi : 0;
-      return d < bd ? s : best;
-    });
+  const perp = sortAxes(beamDir === "Y" ? project.axesY ?? [] : project.axesX ?? []);
+  // Tìm đoạn chứa alongMm để tôn trọng omitSegKeys
+  const bLo = Math.min(beam.start, beam.end);
+  const bHi = Math.max(beam.start, beam.end);
+  const crosses = perp.filter((a) => a.pos >= bLo - 0.5 && a.pos <= bHi + 0.5);
+  if (crosses.length >= 2) {
+    let segIndex = 0;
+    for (let i = 0; i < crosses.length - 1; i++) {
+      const mid = (crosses[i].pos + crosses[i + 1].pos) / 2;
+      if (alongMm < mid) {
+        segIndex = i;
+        break;
+      }
+      segIndex = i;
+    }
+    const a0 = crosses[segIndex];
+    const a1 = crosses[segIndex + 1];
+    if (isBeamSegOmitted(beam, a0.id, a1.id)) {
+      return { lo: axis.pos, hi: axis.pos };
+    }
   }
-  if (isBeamSegOmitted(beam, seg.a0.id, seg.a1.id)) {
-    return { lo: axis.pos, hi: axis.pos };
-  }
-  return beamSegFacesAtAlong(beam, seg.index, alongMm, seg.lo, seg.hi);
+  return beamFacesAtAlongDirect(beam, alongMm, perp);
 }
 
 export function baySlabExtent(
@@ -1902,7 +1963,7 @@ export function insertBeamInBay(
   };
 }
 
-/** Phạm vi vẽ dầm theo chiều dài: kéo đầu tới da dầm ngược phương nếu có. */
+/** Phạm vi vẽ dầm theo chiều dài: kéo đầu tới da dầm ngược phương nếu có (tính lệch/xéo). */
 export function beamDrawRange(
   project: SlabProject,
   beam: PlanBeam,
@@ -1913,13 +1974,18 @@ export function beamDrawRange(
   for (const p of perp) {
     const pLo = Math.min(p.start, p.end);
     const pHi = Math.max(p.start, p.end);
-    if (beam.axis < pLo - 1 || beam.axis > pHi + 1) continue;
-    const { b: bw } = parseSize(p.size);
-    const b1 = Number.isFinite(p.offset) ? (p.offset as number) : bw / 2;
-    const faces = beamOuterFaces(p.axis, { bw, b1 });
-    const half = Math.max(faces.hi - faces.lo, bw) / 2 + 80;
-    if (Math.abs(p.axis - lo) <= half) lo = Math.min(lo, faces.lo);
-    if (Math.abs(p.axis - hi) <= half) hi = Math.max(hi, faces.hi);
+    // Tim dầm đang xét có nằm trên thân dầm ngược phương không?
+    const alongOnPerp = beam.axis;
+    if (alongOnPerp < pLo - 1 || alongOnPerp > pHi + 1) continue;
+    const faces = beamFacesAtAlongDirect(
+      p,
+      alongOnPerp,
+      sortAxes(p.direction === "Y" ? project.axesY ?? [] : project.axesX ?? []),
+    );
+    const half = Math.max(faces.hi - faces.lo, 1) / 2 + 80;
+    // Gần đầu lo/hi của dầm đang xét (theo tim trục dầm ngược)
+    if (Math.abs(p.axis - lo) <= half || faces.lo <= lo + half) lo = Math.min(lo, faces.lo);
+    if (Math.abs(p.axis - hi) <= half || faces.hi >= hi - half) hi = Math.max(hi, faces.hi);
   }
   return { lo, hi };
 }
@@ -1953,10 +2019,12 @@ export function beamSegments(project: SlabProject, beam: PlanBeam): BeamSegment[
       .map((a, fullIndex) => ({ a, fullIndex }))
       .filter(({ a }) => a.pos >= bLo - 0.5 && a.pos <= bHi + 0.5);
     const out: BeamSegment[] = [];
+    // Tim X của dầm đứng — đầu/cuối đoạn bám da dầm ngang lệch/xéo tại đúng tim này
+    const alongX = beam.axis;
     for (let i = 0; i < crosses.length - 1; i++) {
       const a0 = crosses[i].a;
       const a1 = crosses[i + 1].a;
-      const { yLo, yHi } = verticalBeamSegExtent(project, a0.pos, a1.pos, axesY);
+      const { yLo, yHi } = verticalBeamSegExtent(project, a0.pos, a1.pos, axesY, alongX);
       out.push({
         index: i,
         lo: yLo,
@@ -1974,10 +2042,12 @@ export function beamSegments(project: SlabProject, beam: PlanBeam): BeamSegment[
     .map((a, fullIndex) => ({ a, fullIndex }))
     .filter(({ a }) => a.pos >= bLo - 0.5 && a.pos <= bHi + 0.5);
   const out: BeamSegment[] = [];
+  // Tim Y của dầm ngang — đầu/cuối đoạn bám da dầm đứng lệch/xéo tại đúng tim này
+  const alongY = beam.axis;
   for (let i = 0; i < crosses.length - 1; i++) {
     const a0 = crosses[i].a;
     const a1 = crosses[i + 1].a;
-    const { xLo, xHi } = horizontalBeamSegExtent(project, a0.pos, a1.pos, axesX);
+    const { xLo, xHi } = horizontalBeamSegExtent(project, a0.pos, a1.pos, axesX, alongY);
     out.push({
       index: i,
       lo: xLo,
