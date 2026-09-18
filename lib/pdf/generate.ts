@@ -11,7 +11,6 @@ import {
 import {
   axisInteriorSegmentsX,
   axisInteriorSegmentsY,
-  beamDrawRange,
   beamSegSideFaces,
   beamSegments,
   isBeamSegOmitted,
@@ -29,6 +28,9 @@ const PAGE_W = 1684;
 const PAGE_H = 1191;
 const BLACK = rgb(0, 0, 0);
 const GRAY = rgb(0.45, 0.45, 0.45);
+const AXIS_DASH = rgb(0.35, 0.35, 0.35);
+/** Đường line dầm trên mặt bằng (như bản vẽ shop). */
+const BEAM_LINE = rgb(0.82, 0.12, 0.12);
 const REBAR_RED = rgb(0.86, 0.15, 0.15);
 /** Vòng số hiệu trục PDF: bán kính + khoảng hở khỏi da dầm. */
 const AXIS_BUBBLE_R = 5.5;
@@ -177,8 +179,6 @@ function drawPlan(
   const x0 = ox + (maxW - pw) / 2;
   const y0 = oy;
 
-  rect(ctx, x0, y0, pw, ph, 1.1);
-
   const toX = (mm: number) => x0 + mm * s;
   const toY = (mm: number) => y0 + (project.planHeight - mm) * s;
 
@@ -186,60 +186,76 @@ function drawPlan(
   const axesY = sortAxes(project.axesY ?? []);
   const bleed = planBeamBleed(project, axesX, axesY);
   const edgeLeft = toX(bleed.xMin);
+  const edgeRight = toX(bleed.xMax);
   const edgeBottom = toY(bleed.yMin);
+  const edgeTop = toY(bleed.yMax);
 
-  for (const ax of axesX) {
+  // Khung ngoài sàn (da dầm biên) — nét đậm như bản vẽ minh họa
+  rect(ctx, edgeLeft, edgeTop, edgeRight - edgeLeft, edgeBottom - edgeTop, 1.35);
+
+  // —— Tim trục: nét gạch đứt (trục giữa xuyên sàn; biên chỉ đường dẫn vòng) ——
+  for (let i = 0; i < axesX.length; i++) {
+    const ax = axesX[i];
     const x = toX(ax.pos);
     const by = edgeBottom + AXIS_BUBBLE_OFFSET;
-    for (const span of axisInteriorSegmentsX(project, axesX, axesY, ax.pos)) {
-      line(ctx, x, toY(span.hi), x, toY(span.lo), 0.35);
+    const isEdge = i === 0 || i === axesX.length - 1;
+    if (!isEdge) {
+      line(ctx, x, edgeTop, x, edgeBottom, 0.4, AXIS_DASH, [3.5, 2.2]);
     }
-    // Đường dẫn nét mảnh gạch đứt: mép vòng → da sàn ngoài
-    line(ctx, x, by - AXIS_BUBBLE_R, x, edgeBottom, 0.3, BLACK, [2, 1.5]);
+    for (const span of axisInteriorSegmentsX(project, axesX, axesY, ax.pos)) {
+      line(ctx, x, toY(span.hi), x, toY(span.lo), 0.45, AXIS_DASH, [3.5, 2.2]);
+    }
+    line(ctx, x, by - AXIS_BUBBLE_R, x, edgeBottom, 0.35, BLACK, [2, 1.5]);
     ctx.page.drawCircle({
       x,
       y: ty(by),
       size: AXIS_BUBBLE_R,
       borderColor: BLACK,
-      borderWidth: 0.65,
+      borderWidth: 0.7,
     });
-    textSimple(ctx, ax.name, x, by + 2, 6, true, "center");
+    textSimple(ctx, ax.name, x, by + 2, 6.5, true, "center");
   }
-  for (const ay of axesY) {
+  for (let i = 0; i < axesY.length; i++) {
+    const ay = axesY[i];
     const y = toY(ay.pos);
     const bx = edgeLeft - AXIS_BUBBLE_OFFSET;
-    for (const span of axisInteriorSegmentsY(project, axesX, axesY, ay.pos)) {
-      line(ctx, toX(span.lo), y, toX(span.hi), y, 0.35);
+    const isEdge = i === 0 || i === axesY.length - 1;
+    if (!isEdge) {
+      line(ctx, edgeLeft, y, edgeRight, y, 0.4, AXIS_DASH, [3.5, 2.2]);
     }
-    line(ctx, bx + AXIS_BUBBLE_R, y, edgeLeft, y, 0.3, BLACK, [2, 1.5]);
+    for (const span of axisInteriorSegmentsY(project, axesX, axesY, ay.pos)) {
+      line(ctx, toX(span.lo), y, toX(span.hi), y, 0.45, AXIS_DASH, [3.5, 2.2]);
+    }
+    line(ctx, bx + AXIS_BUBBLE_R, y, edgeLeft, y, 0.35, BLACK, [2, 1.5]);
     ctx.page.drawCircle({
       x: bx,
       y: ty(y),
       size: AXIS_BUBBLE_R,
       borderColor: BLACK,
-      borderWidth: 0.65,
+      borderWidth: 0.7,
     });
-    textSimple(ctx, ay.name, bx, y + 2, 6, true, "center");
+    textSimple(ctx, ay.name, bx, y + 2, 6.5, true, "center");
   }
 
+  // —— Đường line dầm (tim thân, có lệch/xéo) + số hiệu D1(220x500) ——
   for (const b of project.beams) {
     drawBeam(ctx, b, toX, toY);
   }
 
   for (const ls of project.lowSlabs ?? []) {
-    const x0 = ls.x;
-    const y0 = ls.y;
-    const x1 = ls.x + ls.w;
-    const y1 = ls.y + ls.h;
-    rect(ctx, toX(x0), toY(y1), ls.w * s, ls.h * s, 0.6);
-    for (const seg of rectDiagonalHatchSegments(x0, y0, x1, y1, 200)) {
-      line(ctx, toX(seg.xA), toY(seg.yA), toX(seg.xB), toY(seg.yB), 0.45);
+    const lx0 = ls.x;
+    const ly0 = ls.y;
+    const lx1 = ls.x + ls.w;
+    const ly1 = ls.y + ls.h;
+    rect(ctx, toX(lx0), toY(ly1), ls.w * s, ls.h * s, 0.55);
+    for (const seg of rectDiagonalHatchSegments(lx0, ly0, lx1, ly1, 200)) {
+      line(ctx, toX(seg.xA), toY(seg.yA), toX(seg.xB), toY(seg.yB), 0.4, GRAY);
     }
     textSimple(
       ctx,
       `${ls.name || "ST"}${(ls.rebarMode ?? "press") === "cut" ? " · cắt" : " · nhấn"}`,
-      toX((x0 + x1) / 2),
-      toY((y0 + y1) / 2),
+      toX((lx0 + lx1) / 2),
+      toY((ly0 + ly1) / 2),
       6,
       false,
       "center",
@@ -247,77 +263,71 @@ function drawPlan(
   }
 
   for (const o of project.openings ?? []) {
-    const x0 = o.x;
-    const y0 = o.y;
-    const x1 = o.x + o.w;
-    const y1 = o.y + o.h;
-    rect(ctx, toX(x0), toY(y1), o.w * s, o.h * s, 0.7);
-    const [d1, d2] = rectOpeningDiagonals(x0, y0, x1, y1);
+    const ox0 = o.x;
+    const oy0 = o.y;
+    const ox1 = o.x + o.w;
+    const oy1 = o.y + o.h;
+    rect(ctx, toX(ox0), toY(oy1), o.w * s, o.h * s, 0.65);
+    const [d1, d2] = rectOpeningDiagonals(ox0, oy0, ox1, oy1);
     line(ctx, toX(d1.xA), toY(d1.yA), toX(d1.xB), toY(d1.yB), 0.7, BLACK, [5, 3]);
     line(ctx, toX(d2.xA), toY(d2.yA), toX(d2.xB), toY(d2.yB), 0.7, BLACK, [5, 3]);
-    textSimple(ctx, o.name || "Ô", toX((x0 + x1) / 2), toY((y0 + y1) / 2), 6, false, "center");
+    textSimple(ctx, o.name || "Ô", toX((ox0 + ox1) / 2), toY((oy0 + oy1) / 2), 6.5, true, "center");
   }
 
-  // Thép liên tục; cắt tại ô thủng / sàn thấp cắt; nhấn tại dầm quanh sàn thấp nhấn
+  // —— Thép sàn + số hiệu thép ——
   const hook = SLAB_REBAR_HOOK_MM;
   const pressAmber = rgb(0.9, 0.55, 0.1);
   for (const bar of stripRebarBarSegments(project, axesX, axesY)) {
     if (bar.dir === "X") {
-      line(ctx, toX(bar.x0), toY(bar.y), toX(bar.x1), toY(bar.y), 0.7, REBAR_RED);
-      line(ctx, toX(bar.x0), toY(bar.y), toX(bar.x0), toY(bar.y - hook), 0.7, REBAR_RED);
-      line(ctx, toX(bar.x1), toY(bar.y), toX(bar.x1), toY(bar.y - hook), 0.7, REBAR_RED);
+      line(ctx, toX(bar.x0), toY(bar.y), toX(bar.x1), toY(bar.y), 0.55, REBAR_RED);
+      line(ctx, toX(bar.x0), toY(bar.y), toX(bar.x0), toY(bar.y - hook), 0.55, REBAR_RED);
+      line(ctx, toX(bar.x1), toY(bar.y), toX(bar.x1), toY(bar.y - hook), 0.55, REBAR_RED);
     } else {
-      line(ctx, toX(bar.x), toY(bar.y0), toX(bar.x), toY(bar.y1), 0.7, REBAR_RED);
-      line(ctx, toX(bar.x), toY(bar.y0), toX(bar.x + hook), toY(bar.y0), 0.7, REBAR_RED);
-      line(ctx, toX(bar.x), toY(bar.y1), toX(bar.x + hook), toY(bar.y1), 0.7, REBAR_RED);
+      line(ctx, toX(bar.x), toY(bar.y0), toX(bar.x), toY(bar.y1), 0.55, REBAR_RED);
+      line(ctx, toX(bar.x), toY(bar.y0), toX(bar.x + hook), toY(bar.y0), 0.55, REBAR_RED);
+      line(ctx, toX(bar.x), toY(bar.y1), toX(bar.x + hook), toY(bar.y1), 0.55, REBAR_RED);
     }
   }
   const tick = 70;
   for (const m of stripRebarPressMarks(project, axesX, axesY)) {
     if (m.dir === "X") {
-      line(ctx, toX(m.x), toY(m.y - tick), toX(m.x), toY(m.y + tick), 0.65, pressAmber);
-      line(ctx, toX(m.x - tick * 0.35), toY(m.y + tick * 0.55), toX(m.x), toY(m.y + tick), 0.65, pressAmber);
-      line(ctx, toX(m.x + tick * 0.35), toY(m.y + tick * 0.55), toX(m.x), toY(m.y + tick), 0.65, pressAmber);
+      line(ctx, toX(m.x), toY(m.y - tick), toX(m.x), toY(m.y + tick), 0.55, pressAmber);
+      line(ctx, toX(m.x - tick * 0.35), toY(m.y + tick * 0.55), toX(m.x), toY(m.y + tick), 0.55, pressAmber);
+      line(ctx, toX(m.x + tick * 0.35), toY(m.y + tick * 0.55), toX(m.x), toY(m.y + tick), 0.55, pressAmber);
     } else {
-      line(ctx, toX(m.x - tick), toY(m.y), toX(m.x + tick), toY(m.y), 0.65, pressAmber);
-      line(ctx, toX(m.x + tick * 0.55), toY(m.y - tick * 0.35), toX(m.x + tick), toY(m.y), 0.65, pressAmber);
-      line(ctx, toX(m.x + tick * 0.55), toY(m.y + tick * 0.35), toX(m.x + tick), toY(m.y), 0.65, pressAmber);
+      line(ctx, toX(m.x - tick), toY(m.y), toX(m.x + tick), toY(m.y), 0.55, pressAmber);
+      line(ctx, toX(m.x + tick * 0.55), toY(m.y - tick * 0.35), toX(m.x + tick), toY(m.y), 0.55, pressAmber);
+      line(ctx, toX(m.x + tick * 0.55), toY(m.y + tick * 0.35), toX(m.x + tick), toY(m.y), 0.55, pressAmber);
     }
     textSimple(ctx, `↓${m.drop}`, toX(m.x) + 4, toY(m.y) - 4, 5.5, false, "left");
   }
 
+  // Số hiệu thép tại tâm vùng (MC 1-1 Ø10a150…)
   for (const z of zones) {
-    const zx1 = toX(Math.min(z.x1, z.x2));
-    const zx2 = toX(Math.max(z.x1, z.x2));
-    const zy1 = toY(Math.max(z.y1, z.y2));
-    const zy2 = toY(Math.min(z.y1, z.y2));
-    ctx.page.drawRectangle({
-      x: zx1,
-      y: ty(zy2),
-      width: zx2 - zx1,
-      height: zy2 - zy1,
-      borderColor: GRAY,
-      borderWidth: 0.45,
-      borderDashArray: [3, 2],
-    });
+    const mx = (Math.min(z.x1, z.x2) + Math.max(z.x1, z.x2)) / 2;
+    const my = (Math.min(z.y1, z.y2) + Math.max(z.y1, z.y2)) / 2;
+    const spec = `Ø${z.dia}a${z.spacing}`;
+    const label = `${z.mark} ${spec}`;
+    // Offset nhẹ theo phương để X/Y không chồng nhau
+    const dy = z.direction === "X" ? (z.layer === "top" ? -12 : 10) : z.layer === "top" ? -22 : 22;
+    const dx = z.direction === "Y" ? (z.layer === "top" ? 14 : -14) : 0;
+    textSimple(ctx, label, toX(mx) + dx, toY(my) + dy, 6.5, true, "center");
   }
 
-  dimH(ctx, x0, x0 + pw, y0 + ph + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 6, `${Math.round(project.planWidth)}`);
-  dimV(ctx, x0 - AXIS_BUBBLE_OFFSET - AXIS_BUBBLE_R - 6, y0, y0 + ph, `${Math.round(project.planHeight)}`);
-  textSimple(ctx, "MẶT BẰNG CỐT THÉP SÀN", ox + maxW / 2, oy - 16, 11, true, "center");
-  textSimple(
-    ctx,
-    `TL: 1/${project.info.drawingScale}`,
-    ox + maxW / 2,
-    oy - 4,
-    8,
-    false,
-    "center",
-  );
+  dimH(ctx, x0, x0 + pw, edgeBottom + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 8, `${Math.round(project.planWidth)}`);
+  dimV(ctx, edgeLeft - AXIS_BUBBLE_OFFSET - AXIS_BUBBLE_R - 8, y0, y0 + ph, `${Math.round(project.planHeight)}`);
 
-  return y0 + ph + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 20;
+  // Tiêu đề mặt bằng + tỉ lệ (giữa phía trên khung vẽ)
+  textSimple(ctx, "MẶT BẰNG CỐT THÉP SÀN", ox + maxW / 2, oy - 18, 12, true, "center");
+  textSimple(ctx, `TL: 1/${project.info.drawingScale}`, ox + maxW / 2, oy - 5, 8, false, "center");
+
+  return Math.max(edgeBottom, y0 + ph) + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 22;
 }
 
+/**
+ * Vẽ dầm dạng đường line (tim thân) + nhãn Name(BxH) — giống bản vẽ shop minh họa.
+ * Dầm xéo/lệch: nối tim tại hai đầu đoạn.
+ */
 function drawBeam(
   ctx: Ctx,
   b: PlanBeam,
@@ -326,60 +336,37 @@ function drawBeam(
 ) {
   const { project } = ctx;
   const segs = beamSegments(project, b);
-  const { lo: fullLo, hi: fullHi } = beamDrawRange(project, b);
+  let labelX = 0;
+  let labelY = 0;
+  let labelN = 0;
 
   for (const seg of segs) {
     if (isBeamSegOmitted(b, seg.a0.id, seg.a1.id)) continue;
     const { lo0, hi0, lo1, hi1 } = beamSegSideFaces(b, seg.index);
+    const mid0 = (lo0 + hi0) / 2;
+    const mid1 = (lo1 + hi1) / 2;
     const lo = seg.lo;
     const hi = seg.hi;
-    const pts =
-      b.direction === "Y"
-        ? [
-            [toX(lo0), toY(lo)],
-            [toX(hi0), toY(lo)],
-            [toX(hi1), toY(hi)],
-            [toX(lo1), toY(hi)],
-          ]
-        : [
-            [toX(lo), toY(lo0)],
-            [toX(lo), toY(hi0)],
-            [toX(hi), toY(hi1)],
-            [toX(hi), toY(lo1)],
-          ];
-    // PDF Y đảo qua ty()
-    const path = pts
-      .map(([px, py], i) => `${i === 0 ? "M" : "L"} ${px} ${ty(py)}`)
-      .join(" ") + " Z";
-    ctx.page.drawSvgPath(path, {
-      borderColor: BLACK,
-      borderWidth: 0.85,
-    });
+    if (b.direction === "Y") {
+      line(ctx, toX(mid0), toY(lo), toX(mid1), toY(hi), 1.05, BEAM_LINE);
+      labelX += toX((mid0 + mid1) / 2);
+      labelY += (toY(lo) + toY(hi)) / 2;
+    } else {
+      line(ctx, toX(lo), toY(mid0), toX(hi), toY(mid1), 1.05, BEAM_LINE);
+      labelX += (toX(lo) + toX(hi)) / 2;
+      labelY += toY((mid0 + mid1) / 2);
+    }
+    labelN += 1;
   }
+  if (labelN === 0) return;
 
+  const lx = labelX / labelN;
+  const ly = labelY / labelN;
+  const tag = `${b.name}(${b.size})`;
   if (b.direction === "Y") {
-    const faces0 = beamSegSideFaces(b, 0);
-    const xRight = toX(Math.max(faces0.hi0, faces0.hi1));
-    textVertical(
-      ctx,
-      `${b.name}(${b.size})`,
-      xRight + 8,
-      (toY(fullHi) + toY(fullLo)) / 2,
-      5.5,
-      false,
-    );
+    textVertical(ctx, tag, lx + 7, ly, 5.8, false);
   } else {
-    const faces0 = beamSegSideFaces(b, 0);
-    const yTop = toY(Math.max(faces0.hi0, faces0.hi1));
-    textSimple(
-      ctx,
-      `${b.name}(${b.size})`,
-      toX((fullLo + fullHi) / 2),
-      yTop - 8,
-      5.5,
-      false,
-      "center",
-    );
+    textSimple(ctx, tag, lx, ly - 7, 5.8, false, "center");
   }
 }
 
@@ -572,19 +559,20 @@ export async function generateSlabPdf(
     borderWidth: 1.05,
   });
 
-  const title = `${project.info.name} (SL=${project.info.quantity}; dày=${project.info.thickness}mm; ${Math.round(project.planWidth)}×${Math.round(project.planHeight)})`;
-  textSimple(ctx, title, PAGE_W / 2, 36, 14, true, "center");
+  const title = `${project.info.name} (SL=${project.info.quantity}; dày=${project.info.thickness}mm)`;
+  textSimple(ctx, "1/1", 28, 34, 8, false, "left");
+  textSimple(ctx, title, PAGE_W - 36, 34, 11, true, "right");
   textSimple(
     ctx,
-    `Bê tông ${project.info.concreteGrade} · Thép ${project.info.steelGrade} · Lớp BV ${project.info.cover}mm · GiaHuy.Net Shop thép sàn`,
-    PAGE_W / 2,
-    52,
-    8,
+    `Bê tông ${project.info.concreteGrade} · Thép ${project.info.steelGrade} · Lớp BV ${project.info.cover}mm`,
+    PAGE_W - 36,
+    48,
+    7.5,
     false,
-    "center",
+    "right",
   );
 
-  const planBottom = drawPlan(ctx, 40, 72, 780, 420, zones);
+  const planBottom = drawPlan(ctx, 40, 78, 780, 420, zones);
   drawSection(ctx, 860, 72);
 
   let y = Math.max(planBottom, 520);
