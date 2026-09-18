@@ -19,6 +19,7 @@ import {
   SLAB_REBAR_HOOK_MM,
 } from "@/lib/grid";
 import type { PlanSelection, SlabProject } from "@/lib/types";
+import { buildBeamFrameScene, projectSceneToSvg } from "@/lib/view3d";
 
 type Anchor = { leftPct: number; topPct: number };
 
@@ -143,39 +144,75 @@ export function SlabPreview({
   }, [selection?.kind, selection && "beamId" in selection ? selection.beamId : null, selection && "segIndex" in selection ? selection.segIndex : null, selection && "axisId" in selection ? selection.axisId : null, selection && "ix" in selection ? selection.ix : null, selection && "iy" in selection ? selection.iy : null]);
 
   if (show3d) {
+    const scene = buildBeamFrameScene(project);
+    const view = projectSceneToSvg(scene, { width: 920, height: 540, pad: 40 });
     return (
-      <div className="flex h-full min-h-0 items-center justify-center bg-zinc-950 p-4">
-        <svg viewBox="0 0 640 360" className="h-full w-full">
+      <div className="flex h-full min-h-0 items-center justify-center bg-zinc-900 p-3">
+        <svg
+          viewBox={`0 0 ${view.width} ${view.height}`}
+          className="h-full w-full max-h-full rounded border border-zinc-700 bg-white"
+          role="img"
+          aria-label={view.title}
+        >
           <defs>
-            <linearGradient id="slabFace" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3f3f46" />
-              <stop offset="100%" stopColor="#27272a" />
-            </linearGradient>
+            <pattern id="lowHatch3d" patternUnits="userSpaceOnUse" width="6" height="6">
+              <circle cx="1.2" cy="1.2" r="0.7" fill="#9ca3af" />
+            </pattern>
           </defs>
-          <polygon
-            points="120,220 420,160 560,210 260,280"
-            fill="url(#slabFace)"
-            stroke="#79b8ff"
-            strokeWidth="1.5"
-          />
-          <polygon points="120,220 260,280 260,300 120,240" fill="#18181b" stroke="#52525b" strokeWidth="1" />
-          <polygon points="260,280 560,210 560,230 260,300" fill="#09090b" stroke="#52525b" strokeWidth="1" />
-          {zones.slice(0, 4).map((z, i) => {
-            const y = 175 + i * 8;
-            return (
-              <line
-                key={z.id}
-                x1={160 + i * 12}
-                y1={y}
-                x2={480 - i * 8}
-                y2={y - 28}
-                stroke={z.layer === "top" ? "#fbbf24" : "#34d399"}
-                strokeWidth="1.2"
-              />
-            );
-          })}
-          <text x="320" y="330" textAnchor="middle" fill="#a1a1aa" fontSize="12">
-            Mô hình 3D sàn {project.info.name} — {project.info.thickness} mm
+          {view.polygons.map((poly, i) => (
+            <polygon
+              key={`f-${i}`}
+              points={poly.points}
+              fill={poly.kind === "hatch" ? "url(#lowHatch3d)" : "#ffffff"}
+              stroke="#111111"
+              strokeWidth={1.1}
+              strokeLinejoin="round"
+            />
+          ))}
+          {view.lines.map((ln, i) => (
+            <line
+              key={`x-${i}`}
+              x1={ln.x1}
+              y1={ln.y1}
+              x2={ln.x2}
+              y2={ln.y2}
+              stroke="#6b7280"
+              strokeWidth={1}
+              strokeDasharray="6 4"
+            />
+          ))}
+          {view.marks.map((m, i) => (
+            <g key={`m-${i}`} transform={`translate(${m.x}, ${m.y})`}>
+              <polygon points="-7,0 7,0 0,-10" fill="#111" />
+              <line x1={0} y1={0} x2={0} y2={14} stroke="#111" strokeWidth={1} />
+              <text x={10} y={-2} fill="#111" fontSize="11" fontWeight="700" fontFamily="sans-serif">
+                {m.elevText}
+              </text>
+              <text x={10} y={12} fill="#374151" fontSize="10" fontFamily="sans-serif">
+                {m.hsText}
+              </text>
+            </g>
+          ))}
+          <text
+            x={view.width / 2}
+            y={view.height - 22}
+            textAnchor="middle"
+            fill="#111"
+            fontSize="13"
+            fontWeight="700"
+            fontFamily="sans-serif"
+          >
+            {view.title}
+          </text>
+          <text
+            x={view.width / 2}
+            y={view.height - 8}
+            textAnchor="middle"
+            fill="#4b5563"
+            fontSize="11"
+            fontFamily="sans-serif"
+          >
+            {view.subtitle}
           </text>
         </svg>
       </div>

@@ -2283,6 +2283,9 @@ export function SlabApp() {
 
           {tab === "model3d" && (
             <Panel title="Mô hình 3D" className="max-w-xl">
+              <p className="mb-2 text-[11px] text-zinc-400">
+                Phối cảnh dầm sàn (isometric): cột + dầm hộp, nét ẩn bị che, cao độ + Hs, ô thủng X / sàn thấp chấm.
+              </p>
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
@@ -2290,7 +2293,7 @@ export function SlabApp() {
                   variant="secondary"
                   onClick={() => {
                     persist({ ...project, show3d: true });
-                    setStatus("Đã tạo mô hình 3D.");
+                    setStatus("Đã tạo phối cảnh dầm sàn 3D.");
                   }}
                 >
                   <Box /> Tạo mô hình 3D
@@ -2305,9 +2308,6 @@ export function SlabApp() {
                   }}
                 >
                   Del
-                </Button>
-                <Button size="sm" variant="secondary" onClick={() => setStatus("Top view")}>
-                  Top
                 </Button>
               </div>
             </Panel>

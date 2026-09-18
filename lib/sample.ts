@@ -29,6 +29,7 @@ export function defaultInfo(): SlabInfo {
     concreteGrade: "B25",
     steelGrade: "CB400-V",
     drawingScale: 100,
+    floorElevationM: 8.05,
   };
 }
 

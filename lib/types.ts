@@ -35,6 +35,8 @@ export interface SlabInfo {
   concreteGrade: string;
   steelGrade: string;
   drawingScale: number;
+  /** Cao độ sàn (m) — ghi chú phối cảnh 3D / mặt cắt; mặc định 8.05. */
+  floorElevationM?: number;
 }
 
 /** Trục lưới mặt bằng (mm). X: 1,2,3… — Y: A,B,C… */
