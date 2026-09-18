@@ -164,9 +164,20 @@ export function SlabPreview({
               key={`f-${i}`}
               points={poly.points}
               fill={poly.kind === "hatch" ? "url(#lowHatch3d)" : "#ffffff"}
-              stroke="#111111"
-              strokeWidth={1.1}
-              strokeLinejoin="round"
+              stroke="none"
+            />
+          ))}
+          {view.edges.map((e, i) => (
+            <line
+              key={`e-${i}`}
+              x1={e.x1}
+              y1={e.y1}
+              x2={e.x2}
+              y2={e.y2}
+              stroke={e.style === "solid" ? "#0a0a0a" : "#9ca3af"}
+              strokeWidth={e.style === "solid" ? 1.45 : 0.55}
+              strokeDasharray={e.style === "dashed" ? "3.5 2.2" : undefined}
+              strokeLinecap="round"
             />
           ))}
           {view.lines.map((ln, i) => (

@@ -450,13 +450,12 @@ function drawPhốiCảnh(ctx: Ctx, x: number, y: number, maxW: number, maxH: nu
     if (pts.length < 3) continue;
     const path =
       pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${ty(p.y)}`).join(" ") + " Z";
+    // Chỉ tô trắng — nét cạnh vẽ riêng (liền / đứt)
     ctx.page.drawSvgPath(path, {
       color: rgb(1, 1, 1),
-      borderColor: BLACK,
-      borderWidth: 0.7,
+      borderWidth: 0,
     });
     if (poly.kind === "hatch") {
-      // Chấm nhẹ trên mặt sàn thấp
       for (let i = 0; i < pts.length; i++) {
         const a = pts[i];
         const b = pts[(i + 1) % pts.length];
@@ -466,6 +465,14 @@ function drawPhốiCảnh(ctx: Ctx, x: number, y: number, maxW: number, maxH: nu
           ctx.page.drawCircle({ x: px, y: ty(py), size: 0.6, color: GRAY });
         }
       }
+    }
+  }
+
+  for (const e of view.edges) {
+    if (e.style === "dashed") {
+      line(ctx, ox + e.x1, oy + e.y1, ox + e.x2, oy + e.y2, 0.45, GRAY, [3.2, 2]);
+    } else {
+      line(ctx, ox + e.x1, oy + e.y1, ox + e.x2, oy + e.y2, 0.95, BLACK);
     }
   }
 
