@@ -305,6 +305,75 @@ function rebarSttByMark(schedule: ScheduleRow[]): Map<string, RebarSttInfo> {
   return map;
 }
 
+/** Registry Ø+a+chiều dài từ bảng thống kê (nguồn số hiệu chuẩn). */
+function scheduleSttRegistry(schedule: ScheduleRow[]): Map<string, RebarSttInfo> {
+  return buildRebarSttRegistry(
+    schedule.map((r) => ({ dia: r.dia, spacing: r.spacing, lengthMm: r.barLength })),
+  );
+}
+
+/**
+ * Gán STT mặt bằng theo bảng thống kê: cùng Ø+a+phương, khớp chiều dài gần nhất.
+ */
+function sttInfoForPlanBar(
+  schedule: ScheduleRow[],
+  registry: Map<string, RebarSttInfo>,
+  zones: RebarZone[],
+  bar: { dir: "X" | "Y"; x0?: number; x1?: number; y?: number; y0?: number; y1?: number; x?: number },
+): RebarSttInfo {
+  const spec = steelSpecForBar(zones, schedule, bar);
+  const geoLen = Math.round(barSegLengthMm(bar));
+  const sameSpec = schedule.filter(
+    (r) => r.dia === spec.dia && r.spacing === spec.spacing && r.direction === bar.dir,
+  );
+  const pool = sameSpec.length
+    ? sameSpec
+    : schedule.filter((r) => r.dia === spec.dia && r.spacing === spec.spacing);
+  if (pool.length) {
+    const best = pool.reduce((a, b) =>
+      Math.abs(a.barLength - geoLen) <= Math.abs(b.barLength - geoLen) ? a : b,
+    );
+    const info = registry.get(rebarSpecKey(best.dia, best.spacing, best.barLength));
+    if (info) return info;
+  }
+  const fallback = registry.get(rebarSpecKey(spec.dia, spec.spacing, geoLen));
+  if (fallback) return fallback;
+  return {
+    stt: registry.size + 1,
+    dia: spec.dia,
+    spacing: spec.spacing,
+    lengthMm: geoLen,
+  };
+}
+
+/** Gộp dòng thống kê cùng STT (cùng Ø+a+dài), sắp xếp STT 1,2,3… */
+function scheduleRowsByStt(schedule: ScheduleRow[]): Array<ScheduleRow & { stt: number }> {
+  const sttMap = rebarSttByMark(schedule);
+  const groups = new Map<number, ScheduleRow & { stt: number }>();
+  for (const row of schedule) {
+    const info = sttMap.get(row.mark) ?? {
+      stt: groups.size + 1,
+      dia: row.dia,
+      spacing: row.spacing,
+      lengthMm: Math.round(row.barLength),
+    };
+    const prev = groups.get(info.stt);
+    if (!prev) {
+      groups.set(info.stt, { ...row, stt: info.stt });
+      continue;
+    }
+    groups.set(info.stt, {
+      ...prev,
+      qtyMembers: prev.qtyMembers + row.qtyMembers,
+      qtyTotal: prev.qtyTotal + row.qtyTotal,
+      totalM: prev.totalM + row.totalM,
+      weight: prev.weight + row.weight,
+      note: [prev.note, row.note].filter(Boolean).join(" · ") || prev.note,
+    });
+  }
+  return [...groups.values()].sort((a, b) => a.stt - b.stt);
+}
+
 /** Ø+a cho một thanh: zone cùng phương phủ tâm thanh. */
 function steelSpecForBar(
   zones: RebarZone[],
@@ -527,23 +596,11 @@ function drawPlan(
     textSimple(ctx, `↓${m.drop}`, toX(m.x) + 4, toY(m.y) - 4, 5.5, false, "left");
   }
 
-  // Số hiệu trên từng thanh: đỏ; cùng Ø+a+chiều dài → cùng STT; khác dài/Ø → 1,2,3…
+  // Số hiệu trên từng thanh: đỏ; STT khớp bảng thống kê (Ø+a+chiều dài)
   const CALL_GAP = 8;
-  const sttRegistry = buildRebarSttRegistry(
-    bars.map((bar) => {
-      const spec = steelSpecForBar(zones, ctx.model.schedule, bar);
-      return { dia: spec.dia, spacing: spec.spacing, lengthMm: barSegLengthMm(bar) };
-    }),
-  );
+  const sttRegistry = scheduleSttRegistry(ctx.model.schedule);
   for (const bar of bars) {
-    const spec = steelSpecForBar(zones, ctx.model.schedule, bar);
-    const len = Math.round(barSegLengthMm(bar));
-    const info = sttRegistry.get(rebarSpecKey(spec.dia, spec.spacing, len)) ?? {
-      stt: sttRegistry.size + 1,
-      dia: spec.dia,
-      spacing: spec.spacing,
-      lengthMm: len,
-    };
+    const info = sttInfoForPlanBar(ctx.model.schedule, sttRegistry, zones, bar);
     const label = `Ø${info.dia}a${info.spacing}`;
     const labelW = ctx.font.widthOfTextAtSize(label, 6.2);
     const gap = 2.5;
@@ -769,7 +826,12 @@ function drawShops(ctx: Ctx, yStart: number, rows: ScheduleRow[]) {
   const colW = 260;
   const rowH = 52;
   const sttMap = rebarSttByMark(rows);
-  rows.forEach((row, i) => {
+  const ordered = [...rows].sort((a, b) => {
+    const sa = sttMap.get(a.mark)?.stt ?? 0;
+    const sb = sttMap.get(b.mark)?.stt ?? 0;
+    return sa - sb || a.mark.localeCompare(b.mark);
+  });
+  ordered.forEach((row, i) => {
     const col = i % 3;
     const r = Math.floor(i / 3);
     const x = 36 + col * (colW + 16);
@@ -787,7 +849,7 @@ function drawShops(ctx: Ctx, yStart: number, rows: ScheduleRow[]) {
     );
     drawShape(ctx, row, x + 8, yy + 30, colW - 16, 18);
   });
-  const rowsN = Math.ceil(rows.length / 3);
+  const rowsN = Math.ceil(ordered.length / 3);
   return y + rowsN * (rowH + 10) + 8;
 }
 
@@ -892,7 +954,7 @@ function drawPhốiCảnh(ctx: Ctx, x: number, y: number, maxW: number, maxH: nu
 
 function drawScheduleTable(ctx: Ctx, x: number, y: number) {
   const { project, model } = ctx;
-  const rows = model.schedule;
+  const rows = scheduleRowsByStt(model.schedule);
   const cols = [
     { w: 36 },
     { w: 40 },
@@ -936,12 +998,10 @@ function drawScheduleTable(ctx: Ctx, x: number, y: number) {
   ];
   headers.forEach((lb, i) => textSimple(ctx, lb, mid(i), ty0 + headerH / 2 + 2, 6, false, "center"));
 
-  const sttMap = rebarSttByMark(rows);
   rows.forEach((row, i) => {
     const ry = ty0 + headerH + i * rowH;
     line(ctx, colX[1], ry + rowH, x + w, ry + rowH, 0.3);
-    const info = sttMap.get(row.mark) ?? { stt: i + 1, dia: row.dia, spacing: row.spacing };
-    textSimple(ctx, String(info.stt), mid(1), ry + rowH / 2 + 2, 7, true, "center");
+    textSimple(ctx, String(row.stt), mid(1), ry + rowH / 2 + 2, 7, true, "center");
     drawShape(ctx, row, colX[2] + 2, ry + 1, cols[2].w - 4, rowH - 2);
     textSimple(ctx, String(row.dia), mid(3), ry + rowH / 2 + 2, 7, false, "center");
     textSimple(ctx, String(row.barLength), mid(4), ry + rowH / 2 + 2, 7, false, "center");
