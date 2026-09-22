@@ -424,14 +424,16 @@ function drawPlan(
     drawRebarCallout(ctx, toX(mx) + dx, toY(my) + dy, info.stt, info.dia, info.spacing);
   }
 
-  dimH(ctx, x0, x0 + pw, edgeBottom + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 8, `${Math.round(project.planWidth)}`);
+  const dimBottomY = edgeBottom + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 8;
+  dimH(ctx, x0, x0 + pw, dimBottomY, `${Math.round(project.planWidth)}`);
   dimV(ctx, edgeLeft - AXIS_BUBBLE_OFFSET - AXIS_BUBBLE_R - 8, y0, y0 + ph, `${Math.round(project.planHeight)}`);
 
-  // Tiêu đề mặt bằng + tỉ lệ (giữa phía trên khung vẽ)
-  textSimple(ctx, "MẶT BẰNG CỐT THÉP SÀN", ox + maxW / 2, oy - 18, 12, true, "center");
-  textSimple(ctx, `TL: 1/${project.info.drawingScale}`, ox + maxW / 2, oy - 5, 8, false, "center");
+  // Tiêu đề + tỉ lệ: dưới bản vẽ, hở khỏi số dim ngang
+  const titleY = dimBottomY + 28;
+  textSimple(ctx, "MẶT BẰNG CỐT THÉP SÀN", ox + maxW / 2, titleY, 12, true, "center");
+  textSimple(ctx, `TL: 1/${project.info.drawingScale}`, ox + maxW / 2, titleY + 14, 8, false, "center");
 
-  return Math.max(edgeBottom, y0 + ph) + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 22;
+  return titleY + 24;
 }
 
 /**
