@@ -30,6 +30,7 @@ export function defaultInfo(): SlabInfo {
     steelGrade: "CB400-V",
     drawingScale: 100,
     floorElevationM: 8.05,
+    showDistRange: true,
   };
 }
 
