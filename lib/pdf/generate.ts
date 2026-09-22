@@ -221,16 +221,28 @@ function dimH(ctx: Ctx, x1: number, x2: number, y: number, label: string, size =
   line(ctx, lo, y, hi, y, 0.45);
   line(ctx, lo, y - 3, lo, y + 3, 0.45);
   line(ctx, hi, y - 3, hi, y + 3, 0.45);
+  // Số nằm ngang — song song đường dim ngang
   textSimple(ctx, label, (lo + hi) / 2, y - 1, size, false, "center");
 }
 
-function dimV(ctx: Ctx, x: number, y1: number, y2: number, label: string, size = 6.5) {
+function dimV(
+  ctx: Ctx,
+  x: number,
+  y1: number,
+  y2: number,
+  label: string,
+  size = 6.5,
+  /** Phía đặt số so với đường dim (ngoài bản vẽ). */
+  labelSide: "left" | "right" = "left",
+) {
   const lo = Math.min(y1, y2);
   const hi = Math.max(y1, y2);
   line(ctx, x, lo, x, hi, 0.45);
   line(ctx, x - 3, lo, x + 3, lo, 0.45);
   line(ctx, x - 3, hi, x + 3, hi, 0.45);
-  textSimple(ctx, label, x + 6, (lo + hi) / 2, size, false, "left");
+  // Số xoay dọc — song song đường dim đứng
+  const tx = labelSide === "left" ? x - 5 : x + 5;
+  textVertical(ctx, label, tx, (lo + hi) / 2, size, false);
 }
 
 function drawShape(ctx: Ctx, row: ScheduleRow, x: number, y: number, w: number, h: number) {
@@ -537,7 +549,7 @@ function drawSection(ctx: Ctx, x: number, y: number) {
       borderWidth: 0.6,
     });
   }
-  dimV(ctx, x + W - 8, sy, sy + slabT, `${project.info.thickness}`);
+  dimV(ctx, x + W - 8, sy, sy + slabT, `${project.info.thickness}`, 6.5, "right");
   textSimple(ctx, `Lớp BV ${project.info.cover}`, x + W / 2, sy + slabT + beamH + 14, 7, false, "center");
   return sy + slabT + beamH + 28;
 }
