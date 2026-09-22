@@ -1176,6 +1176,71 @@ export function baySlabExtent(
   };
 }
 
+/** Inset khoảng rải từ mí dầm trong (mm). */
+export const SLAB_DIST_RANGE_INSET_MM = 50;
+
+export type DistRangeSeg = {
+  xA: number;
+  yA: number;
+  xB: number;
+  yB: number;
+  lenMm: number;
+};
+
+/**
+ * Đường khoảng rải thép sàn cho một thanh: nét ⊥ qua giữa thanh;
+ * đầu/cuối = mí dầm trong ± inset (mặc định 50mm vào lòng sàn).
+ * Thanh X → khoảng rải theo Y (ô chứa thanh); thanh Y → theo X.
+ */
+export function slabDistRangeForBar(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+  bar: RebarBarSeg,
+  insetMm: number = SLAB_DIST_RANGE_INSET_MM,
+): DistRangeSeg | null {
+  if (axesX.length < 2 || axesY.length < 2) return null;
+  const inset = Math.max(0, Math.round(insetMm));
+
+  if (bar.dir === "X") {
+    const mx = (bar.x0 + bar.x1) / 2;
+    let yLo = Infinity;
+    let yHi = -Infinity;
+    for (let iy = 0; iy < axesY.length - 1; iy++) {
+      for (let ix = 0; ix < axesX.length - 1; ix++) {
+        const s = baySlabExtent(project, axesX, axesY, ix, iy);
+        if (bar.y >= s.y0 - 1 && bar.y <= s.y1 + 1) {
+          yLo = Math.min(yLo, s.y0);
+          yHi = Math.max(yHi, s.y1);
+        }
+      }
+    }
+    if (!(yHi > yLo)) return null;
+    const yA = yLo + inset;
+    const yB = yHi - inset;
+    if (!(yB - yA > 1)) return null;
+    return { xA: mx, yA, xB: mx, yB, lenMm: yB - yA };
+  }
+
+  const my = (bar.y0 + bar.y1) / 2;
+  let xLo = Infinity;
+  let xHi = -Infinity;
+  for (let iy = 0; iy < axesY.length - 1; iy++) {
+    for (let ix = 0; ix < axesX.length - 1; ix++) {
+      const s = baySlabExtent(project, axesX, axesY, ix, iy);
+      if (bar.x >= s.x0 - 1 && bar.x <= s.x1 + 1) {
+        xLo = Math.min(xLo, s.x0);
+        xHi = Math.max(xHi, s.x1);
+      }
+    }
+  }
+  if (!(xHi > xLo)) return null;
+  const xA = xLo + inset;
+  const xB = xHi - inset;
+  if (!(xB - xA > 1)) return null;
+  return { xA, yA: my, xB, yB: my, lenMm: xB - xA };
+}
+
 /** Đoạn chéo trong hình chữ nhật (clip) theo hằng số x−y = c — nét sàn thấp /. */
 export function rectDiagonalHatchSegments(
   x0: number,
