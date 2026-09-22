@@ -35,6 +35,8 @@ const GRAY = rgb(0.45, 0.45, 0.45);
 const AXIS_LINE = rgb(0.28, 0.28, 0.28);
 /** Chỉ thép dùng nét đỏ; dầm / khung / tim trục = đen. */
 const REBAR_RED = rgb(0.86, 0.15, 0.15);
+/** Đường khoảng rải thép sàn (⊥ phương thanh). */
+const DIST_BLUE = rgb(0.15, 0.39, 0.92);
 const REBAR_MARK_R = 4.8;
 /** Vòng số hiệu trục PDF: bán kính + khoảng hở khỏi da dầm. */
 const AXIS_BUBBLE_R = 5.5;
@@ -178,6 +180,26 @@ function textInkCentered(
 /** Số hiệu trục: căn giữa tâm vòng. */
 function textInAxisBubble(ctx: Ctx, str: string, cx: number, cy: number, size = 6.5) {
   textInkCentered(ctx, str, cx, cy, size, BLACK, true);
+}
+
+/** Mũi tên đầu đường khoảng rải (hướng từ tip về phía thân). tip=(tx,ty) → về (hx,hy). */
+function drawDistArrow(ctx: Ctx, tipX: number, tipY: number, towardX: number, towardY: number) {
+  const dx = towardX - tipX;
+  const dy = towardY - tipY;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const ah = 5.5;
+  const aw = 3.2;
+  const bx = tipX + ux * ah;
+  const by = tipY + uy * ah;
+  const px = -uy;
+  const py = ux;
+  const path =
+    `M ${tipX} ${ty(tipY)} ` +
+    `L ${bx + px * aw} ${ty(by + py * aw)} ` +
+    `L ${bx - px * aw} ${ty(by - py * aw)} Z`;
+  ctx.page.drawSvgPath(path, { color: DIST_BLUE });
 }
 
 /**
@@ -817,6 +839,70 @@ function drawPlan(
       const cx = barX + REBAR_MARK_R + CALL_GAP;
       const cy = midY - rowLen / 2 + REBAR_MARK_R;
       drawRebarCallout(ctx, cx, cy, info.stt, info.dia, info.spacing, "Y");
+    }
+  }
+
+  // —— Khoảng rải thép sàn: đường xanh ⊥ phương thanh (đầu mũi tên) ——
+  const distZones = zones.filter((z) => z.showSpacing);
+  for (let zi = 0; zi < distZones.length; zi++) {
+    const z = distZones[zi];
+    const zx0 = Math.min(z.x1, z.x2);
+    const zx1 = Math.max(z.x1, z.x2);
+    const zy0 = Math.min(z.y1, z.y2);
+    const zy1 = Math.max(z.y1, z.y2);
+    const nudge =
+      (z.layer === "top" ? 1 : z.layer === "structural" ? -1 : 0) * 120 + (zi % 3) * 40;
+    let xA: number;
+    let yA: number;
+    let xB: number;
+    let yB: number;
+    let lenMm: number;
+    if (z.direction === "X") {
+      // Thanh ngang → khoảng rải dọc Y
+      const mx = (zx0 + zx1) / 2 + nudge;
+      xA = mx;
+      yA = zy0;
+      xB = mx;
+      yB = zy1;
+      lenMm = zy1 - zy0;
+    } else {
+      // Thanh đứng → khoảng rải ngang X
+      const my = (zy0 + zy1) / 2 + nudge;
+      xA = zx0;
+      yA = my;
+      xB = zx1;
+      yB = my;
+      lenMm = zx1 - zx0;
+    }
+    if (!(lenMm > 1)) continue;
+    const pxA = toX(xA);
+    const pyA = toY(yA);
+    const pxB = toX(xB);
+    const pyB = toY(yB);
+    line(ctx, pxA, pyA, pxB, pyB, 1.1, DIST_BLUE);
+    drawDistArrow(ctx, pxA, pyA, pxB, pyB);
+    drawDistArrow(ctx, pxB, pyB, pxA, pyA);
+    ctx.page.drawCircle({
+      x: pxA,
+      y: ty(pyA),
+      size: 2.2,
+      color: rgb(1, 1, 1),
+      borderColor: DIST_BLUE,
+      borderWidth: 0.7,
+    });
+    ctx.page.drawCircle({
+      x: pxB,
+      y: ty(pyB),
+      size: 2.2,
+      color: rgb(1, 1, 1),
+      borderColor: DIST_BLUE,
+      borderWidth: 0.7,
+    });
+    const label = String(Math.round(lenMm));
+    if (z.direction === "X") {
+      textSimple(ctx, label, (pxA + pxB) / 2 + 6, (pyA + pyB) / 2, 6.5, true, "left", DIST_BLUE);
+    } else {
+      textSimple(ctx, label, (pxA + pxB) / 2, (pyA + pyB) / 2 - 8, 6.5, true, "center", DIST_BLUE);
     }
   }
 

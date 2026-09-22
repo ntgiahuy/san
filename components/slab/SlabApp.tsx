@@ -1946,7 +1946,7 @@ export function SlabApp() {
                     checked={zoneForm.showSpacing}
                     onCheckedChange={(v) => setZoneForm({ ...zoneForm, showSpacing: Boolean(v) })}
                   />
-                  Hiện / Ẩn khoảng rải t
+                  Hiện / Ẩn khoảng rải thép sàn
                 </label>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" variant="secondary" onClick={addZone}>

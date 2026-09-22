@@ -158,6 +158,17 @@ export function SlabPreview({
             <pattern id="lowHatch3d" patternUnits="userSpaceOnUse" width="6" height="6">
               <circle cx="1.2" cy="1.2" r="0.7" fill="#9ca3af" />
             </pattern>
+            <marker
+              id="distArrow"
+              viewBox="0 0 10 10"
+              refX="5"
+              refY="5"
+              markerWidth="4.5"
+              markerHeight="4.5"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb" />
+            </marker>
           </defs>
           {view.polygons.map((poly, i) => (
             <polygon
@@ -785,6 +796,70 @@ export function SlabPreview({
                       </text>
                     </g>
                   ))}
+                  {/* Khoảng rải thép sàn: đường xanh ⊥ phương thanh, đầu mũi tên */}
+                  {zones
+                    .filter((z) => z.showSpacing)
+                    .map((z, zi) => {
+                      const zx0 = Math.min(z.x1, z.x2);
+                      const zx1 = Math.max(z.x1, z.x2);
+                      const zy0 = Math.min(z.y1, z.y2);
+                      const zy1 = Math.max(z.y1, z.y2);
+                      // Lệch nhẹ theo lớp để không chồng nhiều số hiệu
+                      const nudge =
+                        (z.layer === "top" ? 1 : z.layer === "structural" ? -1 : 0) * 120 +
+                        (zi % 3) * 40;
+                      let xA: number;
+                      let yA: number;
+                      let xB: number;
+                      let yB: number;
+                      let lenMm: number;
+                      if (z.direction === "X") {
+                        // Thanh ngang → khoảng rải dọc Y
+                        const mx = (zx0 + zx1) / 2 + nudge;
+                        xA = mx;
+                        yA = zy0;
+                        xB = mx;
+                        yB = zy1;
+                        lenMm = zy1 - zy0;
+                      } else {
+                        // Thanh đứng → khoảng rải ngang X
+                        const my = (zy0 + zy1) / 2 + nudge;
+                        xA = zx0;
+                        yA = my;
+                        xB = zx1;
+                        yB = my;
+                        lenMm = zx1 - zx0;
+                      }
+                      if (!(lenMm > 1)) return null;
+                      const midX = (X(xA) + X(xB)) / 2;
+                      const midY = (Y(yA) + Y(yB)) / 2;
+                      return (
+                        <g key={`dist-${z.id}`} pointerEvents="none">
+                          <line
+                            x1={X(xA)}
+                            y1={Y(yA)}
+                            x2={X(xB)}
+                            y2={Y(yB)}
+                            stroke="#2563eb"
+                            strokeWidth="1.8"
+                            markerStart="url(#distArrow)"
+                            markerEnd="url(#distArrow)"
+                          />
+                          <circle cx={X(xA)} cy={Y(yA)} r="2.2" fill="#fff" stroke="#2563eb" strokeWidth="1" />
+                          <circle cx={X(xB)} cy={Y(yB)} r="2.2" fill="#fff" stroke="#2563eb" strokeWidth="1" />
+                          <text
+                            x={midX + (z.direction === "X" ? 8 : 0)}
+                            y={midY + (z.direction === "X" ? 0 : -8)}
+                            fill="#2563eb"
+                            fontSize="10"
+                            fontWeight="700"
+                            textAnchor={z.direction === "X" ? "start" : "middle"}
+                          >
+                            {Math.round(lenMm)}
+                          </text>
+                        </g>
+                      );
+                    })}
                 </>
               );
             })()}
