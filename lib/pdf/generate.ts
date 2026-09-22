@@ -882,22 +882,38 @@ function drawPlan(
     line(ctx, pxA, pyA, pxB, pyB, 1.1, DIST_BLUE);
     drawDistArrow(ctx, pxA, pyA, pxB, pyB);
     drawDistArrow(ctx, pxB, pyB, pxA, pyA);
-    ctx.page.drawCircle({
-      x: pxA,
-      y: ty(pyA),
-      size: 2.2,
-      color: rgb(1, 1, 1),
-      borderColor: DIST_BLUE,
-      borderWidth: 0.7,
-    });
-    ctx.page.drawCircle({
-      x: pxB,
-      y: ty(pyB),
-      size: 2.2,
-      color: rgb(1, 1, 1),
-      borderColor: DIST_BLUE,
-      borderWidth: 0.7,
-    });
+    // Chấm trắng tại giao với thanh thép cùng zone (giống bản CAD)
+    for (const bar of bars) {
+      if (bar.dir !== z.direction) continue;
+      if (z.direction === "X") {
+        // Thanh ngang cắt đường khoảng rải đứng tại (mx, bar.y)
+        if (bar.y < zy0 - 1 || bar.y > zy1 + 1) continue;
+        const bx0 = Math.min(bar.x0, bar.x1);
+        const bx1 = Math.max(bar.x0, bar.x1);
+        if (xA < bx0 - 1 || xA > bx1 + 1) continue;
+        ctx.page.drawCircle({
+          x: toX(xA),
+          y: ty(toY(bar.y)),
+          size: 2.0,
+          color: rgb(1, 1, 1),
+          borderColor: DIST_BLUE,
+          borderWidth: 0.65,
+        });
+      } else {
+        if (bar.x < zx0 - 1 || bar.x > zx1 + 1) continue;
+        const by0 = Math.min(bar.y0, bar.y1);
+        const by1 = Math.max(bar.y0, bar.y1);
+        if (yA < by0 - 1 || yA > by1 + 1) continue;
+        ctx.page.drawCircle({
+          x: toX(bar.x),
+          y: ty(toY(yA)),
+          size: 2.0,
+          color: rgb(1, 1, 1),
+          borderColor: DIST_BLUE,
+          borderWidth: 0.65,
+        });
+      }
+    }
     const label = String(Math.round(lenMm));
     if (z.direction === "X") {
       textSimple(ctx, label, (pxA + pxB) / 2 + 6, (pyA + pyB) / 2, 6.5, true, "left", DIST_BLUE);

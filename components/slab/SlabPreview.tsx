@@ -845,8 +845,36 @@ export function SlabPreview({
                             markerStart="url(#distArrow)"
                             markerEnd="url(#distArrow)"
                           />
-                          <circle cx={X(xA)} cy={Y(yA)} r="2.2" fill="#fff" stroke="#2563eb" strokeWidth="1" />
-                          <circle cx={X(xB)} cy={Y(yB)} r="2.2" fill="#fff" stroke="#2563eb" strokeWidth="1" />
+                          {/* Chấm trắng tại giao với thanh cùng zone */}
+                          {bars
+                            .filter((b) => b.dir === z.direction)
+                            .filter((b) => {
+                              if (z.direction === "X") {
+                                return (
+                                  b.y >= zy0 - 1 &&
+                                  b.y <= zy1 + 1 &&
+                                  xA >= Math.min(b.x0, b.x1) - 1 &&
+                                  xA <= Math.max(b.x0, b.x1) + 1
+                                );
+                              }
+                              return (
+                                b.x >= zx0 - 1 &&
+                                b.x <= zx1 + 1 &&
+                                yA >= Math.min(b.y0, b.y1) - 1 &&
+                                yA <= Math.max(b.y0, b.y1) + 1
+                              );
+                            })
+                            .map((b, bi) => (
+                              <circle
+                                key={`dist-dot-${z.id}-${bi}`}
+                                cx={X(z.direction === "X" ? xA : b.x)}
+                                cy={Y(z.direction === "X" ? b.y : yA)}
+                                r="2.2"
+                                fill="#fff"
+                                stroke="#2563eb"
+                                strokeWidth="1"
+                              />
+                            ))}
                           <text
                             x={midX + (z.direction === "X" ? 8 : 0)}
                             y={midY + (z.direction === "X" ? 0 : -8)}
