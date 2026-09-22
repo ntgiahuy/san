@@ -11,6 +11,9 @@ import {
 } from "../calc";
 import {
   beamFacesAtAlongDirect,
+  beamOuterFaces,
+  beamOuterFacesAtSpan,
+  beamSectionOnAxis,
   beamSegSideFaces,
   beamSegments,
   isBeamSegOmitted,
@@ -22,7 +25,7 @@ import {
   stripRebarPressMarks,
   SLAB_REBAR_HOOK_MM,
 } from "../grid";
-import type { PlanBeam, RebarZone, SlabProject } from "../types";
+import type { GridAxis, PlanBeam, RebarZone, SlabProject } from "../types";
 import { buildBeamFrameScene, projectSceneToSvg } from "../view3d";
 
 const PAGE_W = 1684;
@@ -543,6 +546,96 @@ function dimV(
   textVertical(ctx, label, tx, (lo + hi) / 2, size, false);
 }
 
+/** Chuỗi dim ngang theo các mốc mm (thế giới → PDF qua toX). */
+function dimHChain(
+  ctx: Ctx,
+  marksMm: number[],
+  y: number,
+  toX: (mm: number) => number,
+  size = 5.5,
+) {
+  for (let i = 0; i < marksMm.length - 1; i++) {
+    const a = marksMm[i];
+    const b = marksMm[i + 1];
+    const mm = Math.round(Math.abs(b - a));
+    if (mm < 1) continue;
+    dimH(ctx, toX(a), toX(b), y, String(mm), size);
+  }
+}
+
+/** Chuỗi dim đứng theo các mốc mm (thế giới → PDF qua toY). */
+function dimVChain(
+  ctx: Ctx,
+  marksMm: number[],
+  x: number,
+  toY: (mm: number) => number,
+  size = 5.5,
+  labelSide: "left" | "right" = "left",
+) {
+  for (let i = 0; i < marksMm.length - 1; i++) {
+    const a = marksMm[i];
+    const b = marksMm[i + 1];
+    const mm = Math.round(Math.abs(b - a));
+    if (mm < 1) continue;
+    dimV(ctx, x, toY(a), toY(b), String(mm), size, labelSide);
+  }
+}
+
+/** Da dầm tại trục (fallback tiết diện nếu đoạn bị bỏ). */
+function facesAtAxisSpan(
+  project: SlabProject,
+  beamDir: PlanBeam["direction"],
+  axis: GridAxis,
+  spanIndex: number,
+): { lo: number; hi: number } {
+  const f = beamOuterFacesAtSpan(project, beamDir, axis, spanIndex);
+  if (Math.abs(f.hi - f.lo) >= 1) return f;
+  return beamOuterFaces(axis.pos, beamSectionOnAxis(project, beamDir, axis));
+}
+
+/**
+ * Chuỗi mốc da dầm + lòng sàn theo phương X (dầm đứng trên axesX).
+ * [lo0, hi0, lo1, hi1, …] → đoạn hi−lo = B dầm; lo(i+1)−hi(i) = bề rộng sàn.
+ */
+function faceChainAlongX(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+): number[] {
+  if (axesX.length === 0) return [];
+  const spanIy = Math.max(0, Math.min(axesY.length - 2, Math.floor((axesY.length - 1) / 2)));
+  const pts: number[] = [];
+  for (const ax of axesX) {
+    const f = facesAtAxisSpan(project, "Y", ax, spanIy);
+    const lo = Math.min(f.lo, f.hi);
+    const hi = Math.max(f.lo, f.hi);
+    if (pts.length === 0 || Math.abs(pts[pts.length - 1] - lo) > 0.5) pts.push(lo);
+    else pts[pts.length - 1] = lo;
+    pts.push(hi);
+  }
+  return pts;
+}
+
+/** Chuỗi mốc da dầm + lòng sàn theo phương Y (dầm ngang trên axesY). */
+function faceChainAlongY(
+  project: SlabProject,
+  axesX: GridAxis[],
+  axesY: GridAxis[],
+): number[] {
+  if (axesY.length === 0) return [];
+  const spanIx = Math.max(0, Math.min(axesX.length - 2, Math.floor((axesX.length - 1) / 2)));
+  const pts: number[] = [];
+  for (const ay of axesY) {
+    const f = facesAtAxisSpan(project, "X", ay, spanIx);
+    const lo = Math.min(f.lo, f.hi);
+    const hi = Math.max(f.lo, f.hi);
+    if (pts.length === 0 || Math.abs(pts[pts.length - 1] - lo) > 0.5) pts.push(lo);
+    else pts[pts.length - 1] = lo;
+    pts.push(hi);
+  }
+  return pts;
+}
+
 function drawShape(ctx: Ctx, row: ScheduleRow, x: number, y: number, w: number, h: number) {
   const midY = y + h * 0.58;
   const x0 = x + 10;
@@ -727,9 +820,45 @@ function drawPlan(
     }
   }
 
-  const dimBottomY = edgeBottom + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 8;
-  dimH(ctx, x0, x0 + pw, dimBottomY, `${Math.round(project.planWidth)}`);
-  dimV(ctx, edgeLeft - AXIS_BUBBLE_OFFSET - AXIS_BUBBLE_R - 8, y0, y0 + ph, `${Math.round(project.planHeight)}`);
+  // —— Đường dim: da dầm + lòng sàn · tim trục · tổng ——
+  const DIM_GAP = 11;
+  const faceX = faceChainAlongX(project, axesX, axesY);
+  const faceY = faceChainAlongY(project, axesX, axesY);
+  const axisXMarks = axesX.map((a) => a.pos);
+  const axisYMarks = axesY.map((a) => a.pos);
+
+  // Ngang (phương X): dưới vòng trục — sát trong → ngoài
+  let yDim = edgeBottom + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 6;
+  if (faceX.length >= 2) {
+    dimHChain(ctx, faceX, yDim, toX, 5.2); // B dầm + bề rộng sàn
+    yDim += DIM_GAP;
+  }
+  if (axisXMarks.length >= 2) {
+    dimHChain(ctx, axisXMarks, yDim, toX, 5.5); // tim trục
+    yDim += DIM_GAP;
+  }
+  dimH(ctx, toX(bleed.xMin), toX(bleed.xMax), yDim, `${Math.round(bleed.xMax - bleed.xMin)}`, 6.5);
+  const dimBottomY = yDim;
+
+  // Đứng (phương Y): trái vòng trục — sát trong → ngoài (x giảm)
+  let xDim = edgeLeft - AXIS_BUBBLE_OFFSET - AXIS_BUBBLE_R - 6;
+  if (faceY.length >= 2) {
+    dimVChain(ctx, faceY, xDim, toY, 5.2, "left");
+    xDim -= DIM_GAP;
+  }
+  if (axisYMarks.length >= 2) {
+    dimVChain(ctx, axisYMarks, xDim, toY, 5.5, "left");
+    xDim -= DIM_GAP;
+  }
+  dimV(
+    ctx,
+    xDim,
+    toY(bleed.yMin),
+    toY(bleed.yMax),
+    `${Math.round(bleed.yMax - bleed.yMin)}`,
+    6.5,
+    "left",
+  );
 
   // Tiêu đề + tỉ lệ: dưới bản vẽ, hở khỏi số dim ngang
   const titleY = dimBottomY + 28;
