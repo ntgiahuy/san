@@ -411,8 +411,11 @@ function drawPlan(
     };
     const mx = (Math.min(z.x1, z.x2) + Math.max(z.x1, z.x2)) / 2;
     const my = (Math.min(z.y1, z.y2) + Math.max(z.y1, z.y2)) / 2;
-    const dy = z.direction === "X" ? (z.layer === "top" ? -14 : 12) : z.layer === "top" ? -26 : 26;
-    const dx = z.direction === "Y" ? (z.layer === "top" ? 16 : -18) : 0;
+    // Tách 4 số hiệu (MC/MT × X/Y) khỏi tâm ô để không chồng
+    const dy =
+      z.direction === "X" ? (z.layer === "top" ? -20 : 18) : z.layer === "top" ? -36 : 36;
+    const dx =
+      z.direction === "Y" ? (z.layer === "top" ? 28 : -34) : z.layer === "top" ? -22 : 22;
     drawRebarCallout(ctx, toX(mx) + dx, toY(my) + dy, info.stt, info.dia, info.spacing);
   }
 
