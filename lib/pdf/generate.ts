@@ -5,6 +5,7 @@ import {
   computeModel,
   effectiveZones,
   parseBeamSize,
+  weightPerMeter,
   type ComputedSlabModel,
   type ScheduleRow,
 } from "../calc";
@@ -386,16 +387,28 @@ function sttInfoForPlanBar(
   };
 }
 
-/** Gộp dòng thống kê cùng STT (cùng Ø+a+dài), sắp xếp STT 1,2,3… */
+/** Gộp dòng thống kê cùng STT + thêm STT chỉ có trên mặt bằng (thanh ngắn/cắt). */
 function scheduleRowsByStt(
   schedule: ScheduleRow[],
-  registry?: Map<string, RebarSttInfo>,
+  registry: Map<string, RebarSttInfo>,
+  bars: Array<{
+    dir: "X" | "Y";
+    x0?: number;
+    x1?: number;
+    y?: number;
+    y0?: number;
+    y1?: number;
+    x?: number;
+  }>,
+  zones: RebarZone[],
+  hookMm = 50,
 ): Array<ScheduleRow & { stt: number }> {
   const sttMap = rebarSttByMark(schedule);
   const groups = new Map<number, ScheduleRow & { stt: number }>();
   for (const row of schedule) {
-    const fromReg = registry?.get(rebarSpecKey(row.dia, row.spacing, row.barLength));
-    const info = fromReg ??
+    const fromReg = registry.get(rebarSpecKey(row.dia, row.spacing, row.barLength));
+    const info =
+      fromReg ??
       sttMap.get(row.mark) ?? {
         stt: groups.size + 1,
         dia: row.dia,
@@ -416,6 +429,52 @@ function scheduleRowsByStt(
       note: [prev.note, row.note].filter(Boolean).join(" · ") || prev.note,
     });
   }
+
+  // Đếm thanh mặt bằng theo key STT
+  const barCounts = new Map<string, { count: number; dir: "X" | "Y" }>();
+  for (const bar of bars) {
+    const spec = steelSpecForBar(zones, schedule, bar);
+    const len = canonicalBarLengthMm(
+      barSegLengthMm(bar),
+      schedule,
+      spec.dia,
+      spec.spacing,
+      bar.dir,
+    );
+    const key = rebarSpecKey(spec.dia, spec.spacing, len);
+    const cur = barCounts.get(key) ?? { count: 0, dir: bar.dir };
+    cur.count += 1;
+    cur.dir = bar.dir;
+    barCounts.set(key, cur);
+  }
+
+  for (const info of registry.values()) {
+    if (groups.has(info.stt)) continue;
+    const key = rebarSpecKey(info.dia, info.spacing, info.lengthMm);
+    const hit = barCounts.get(key);
+    const hook = 0;
+    const qty = Math.max(1, hit?.count ?? 1);
+    const totalM = (info.lengthMm * qty) / 1000;
+    groups.set(info.stt, {
+      mark: `MB-${info.stt}`,
+      layer: "bottom",
+      direction: hit?.dir ?? "X",
+      dia: info.dia,
+      spacing: info.spacing,
+      barLength: info.lengthMm,
+      leftHook: hook,
+      rightHook: hook,
+      qtyEach: qty,
+      qtyMembers: 1,
+      qtyTotal: qty,
+      totalM,
+      weight: totalM * weightPerMeter(info.dia),
+      shape: "straight",
+      note: "Đoạn mặt bằng (cắt/ngắn)",
+      stt: info.stt,
+    });
+  }
+
   return [...groups.values()].sort((a, b) => a.stt - b.stt);
 }
 
@@ -864,26 +923,37 @@ function drawBeam(
   }
 }
 
-function drawShops(ctx: Ctx, yStart: number, rows: ScheduleRow[]) {
+/** Toàn bộ dòng thống kê PDF (gồm STT thanh ngắn trên mặt bằng). */
+function buildPdfScheduleRows(ctx: Ctx): Array<ScheduleRow & { stt: number }> {
+  const { project, model } = ctx;
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+  const zones = effectiveZones(project);
+  const bars = stripRebarBarSegments(project, axesX, axesY);
+  const registry = unifiedSttRegistry(model.schedule, bars, zones);
+  return scheduleRowsByStt(
+    model.schedule,
+    registry,
+    bars,
+    zones,
+    project.info.cover || 50,
+  );
+}
+
+function drawShops(ctx: Ctx, yStart: number, _rows: ScheduleRow[]) {
   let y = yStart;
   textSimple(ctx, "SHOP NỔ THÉP SÀN", 40, y, 11, true);
   y += 18;
   const colW = 260;
   const rowH = 52;
-  const sttMap = rebarSttByMark(rows);
-  const ordered = [...rows].sort((a, b) => {
-    const sa = sttMap.get(a.mark)?.stt ?? 0;
-    const sb = sttMap.get(b.mark)?.stt ?? 0;
-    return sa - sb || a.mark.localeCompare(b.mark);
-  });
+  const ordered = buildPdfScheduleRows(ctx);
   ordered.forEach((row, i) => {
     const col = i % 3;
     const r = Math.floor(i / 3);
     const x = 36 + col * (colW + 16);
     const yy = y + r * (rowH + 10);
     rect(ctx, x, yy, colW, rowH, 0.7);
-    const info = sttMap.get(row.mark) ?? { stt: i + 1, dia: row.dia, spacing: row.spacing };
-    drawRebarCallout(ctx, x + 14, yy + 12, info.stt, info.dia, info.spacing);
+    drawRebarCallout(ctx, x + 14, yy + 12, row.stt, row.dia, row.spacing);
     textSimple(ctx, row.mark, x + 8, yy + 26, 6.5, false, "left");
     textSimple(
       ctx,
@@ -894,7 +964,7 @@ function drawShops(ctx: Ctx, yStart: number, rows: ScheduleRow[]) {
     );
     drawShape(ctx, row, x + 8, yy + 30, colW - 16, 18);
   });
-  const rowsN = Math.ceil(ordered.length / 3);
+  const rowsN = Math.ceil(Math.max(ordered.length, 1) / 3);
   return y + rowsN * (rowH + 10) + 8;
 }
 
@@ -998,13 +1068,8 @@ function drawPhốiCảnh(ctx: Ctx, x: number, y: number, maxW: number, maxH: nu
 }
 
 function drawScheduleTable(ctx: Ctx, x: number, y: number) {
-  const { project, model } = ctx;
-  const axesX = sortAxes(project.axesX ?? []);
-  const axesY = sortAxes(project.axesY ?? []);
-  const zones = effectiveZones(project);
-  const bars = stripRebarBarSegments(project, axesX, axesY);
-  const registry = unifiedSttRegistry(model.schedule, bars, zones);
-  const rows = scheduleRowsByStt(model.schedule, registry);
+  const { project } = ctx;
+  const rows = buildPdfScheduleRows(ctx);
   const cols = [
     { w: 36 },
     { w: 40 },
@@ -1077,7 +1142,16 @@ function drawScheduleTable(ctx: Ctx, x: number, y: number) {
 
 function drawSummaryTable(ctx: Ctx, x: number, y: number) {
   const { model } = ctx;
-  const dias = model.byDia;
+  const rows = buildPdfScheduleRows(ctx);
+  const byDiaMap = new Map<number, { dia: number; lengthM: number; weight: number }>();
+  for (const r of rows) {
+    const cur = byDiaMap.get(r.dia) ?? { dia: r.dia, lengthM: 0, weight: 0 };
+    cur.lengthM += r.totalM;
+    cur.weight += r.weight;
+    byDiaMap.set(r.dia, cur);
+  }
+  const dias = [...byDiaMap.values()].sort((a, b) => a.dia - b.dia);
+  const totalWeight = dias.reduce((s, d) => s + d.weight, 0);
   const colW = 78;
   const labW = 138;
   const w = labW + Math.max(dias.length, 1) * colW;
@@ -1108,7 +1182,7 @@ function drawSummaryTable(ctx: Ctx, x: number, y: number) {
     textSimple(ctx, "—", x + labW + colW / 2, ty0 + 14, 8, false, "center");
   }
   const fy = ty0 + gridH + 12;
-  textSimple(ctx, `Tổng TL: ${fmtNum(model.totalWeight)} kg`, x + 8, fy, 8, true);
+  textSimple(ctx, `Tổng TL: ${fmtNum(totalWeight || model.totalWeight)} kg`, x + 8, fy, 8, true);
 }
 
 export async function generateSlabPdf(
