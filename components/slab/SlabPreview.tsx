@@ -560,8 +560,9 @@ export function SlabPreview({
                   />
                   <text
                     x={cx}
-                    y={cy + 2.5}
+                    y={cy}
                     textAnchor="middle"
+                    dominantBaseline="central"
                     fill="#79b8ff"
                     fontSize="8"
                     fontWeight="700"
@@ -625,8 +626,9 @@ export function SlabPreview({
                   />
                   <text
                     x={cx}
-                    y={cy + 2.5}
+                    y={cy}
                     textAnchor="middle"
+                    dominantBaseline="central"
                     fill="#fbbf24"
                     fontSize="8"
                     fontWeight="700"

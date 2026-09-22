@@ -38,10 +38,21 @@ const AXIS_BUBBLE_R = 5.5;
 const AXIS_BUBBLE_GAP = 10;
 const AXIS_BUBBLE_OFFSET = AXIS_BUBBLE_R + AXIS_BUBBLE_GAP;
 
+type KitFont = {
+  unitsPerEm: number;
+  layout: (text: string) => {
+    glyphs: Array<{
+      advanceWidth: number;
+      cbox: { minX: number; minY: number; maxX: number; maxY: number };
+    }>;
+  };
+};
+
 type Ctx = {
   page: PDFPage;
   font: PDFFont;
   fontBold: PDFFont;
+  boldKit: KitFont;
   project: SlabProject;
   model: ComputedSlabModel;
 };
@@ -102,6 +113,49 @@ function textSimple(
     color: BLACK,
   });
   return width;
+}
+
+/** Số hiệu trục: căn giữa tâm vòng theo bbox mực glyph (pdf-lib y = baseline). */
+function textInAxisBubble(ctx: Ctx, str: string, cx: number, cy: number, size = 6.5) {
+  const font = ctx.fontBold;
+  const kit = ctx.boldKit;
+  const scale = size / kit.unitsPerEm;
+  const glyphs = kit.layout(str).glyphs;
+  let pen = 0;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const g of glyphs) {
+    const b = g.cbox;
+    minX = Math.min(minX, pen + b.minX);
+    maxX = Math.max(maxX, pen + b.maxX);
+    minY = Math.min(minY, b.minY);
+    maxY = Math.max(maxY, b.maxY);
+    pen += g.advanceWidth;
+  }
+  if (!Number.isFinite(minX)) {
+    const width = font.widthOfTextAtSize(str, size);
+    ctx.page.drawText(str, {
+      x: cx - width / 2,
+      y: ty(cy) - size * 0.37,
+      size,
+      font,
+      color: BLACK,
+    });
+    return;
+  }
+  const inkCx = ((minX + maxX) / 2) * scale;
+  const inkCy = ((minY + maxY) / 2) * scale;
+  // Nhích xuống nhẹ: tâm mực hình học hơi cao hơn tâm quang học chữ cái.
+  const opticalNudge = size * 0.04;
+  ctx.page.drawText(str, {
+    x: cx - inkCx,
+    y: ty(cy) - inkCy - opticalNudge,
+    size,
+    font,
+    color: BLACK,
+  });
 }
 
 function textVertical(ctx: Ctx, str: string, cx: number, yMid: number, size = 11, bold = true) {
@@ -214,7 +268,7 @@ function drawPlan(
       borderColor: BLACK,
       borderWidth: 0.7,
     });
-    textSimple(ctx, ax.name, x, by + 2, 6.5, true, "center");
+    textInAxisBubble(ctx, ax.name, x, by);
   }
   for (let i = 0; i < axesY.length; i++) {
     const ay = axesY[i];
@@ -235,7 +289,7 @@ function drawPlan(
       borderColor: BLACK,
       borderWidth: 0.7,
     });
-    textSimple(ctx, ay.name, bx, y + 2, 6.5, true, "center");
+    textInAxisBubble(ctx, ay.name, bx, y);
   }
 
   // —— Đường line dầm (tim thân, có lệch/xéo) + số hiệu D1(220x500) ——
@@ -607,10 +661,13 @@ export async function generateSlabPdf(
   pdf.registerFontkit(kit as never);
   const font = await pdf.embedFont(fonts.regular);
   const fontBold = await pdf.embedFont(fonts.bold);
+  const boldKit = (
+    kit as { create: (data: Uint8Array) => KitFont }
+  ).create(new Uint8Array(fonts.bold));
   const page = pdf.addPage([PAGE_W, PAGE_H]);
   const model = computeModel(project);
   const zones = effectiveZones(project);
-  const ctx: Ctx = { page, font, fontBold, project, model };
+  const ctx: Ctx = { page, font, fontBold, boldKit, project, model };
 
   ctx.page.drawRectangle({
     x: 16,
