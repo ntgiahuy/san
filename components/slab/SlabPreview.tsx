@@ -517,7 +517,7 @@ export function SlabPreview({
               const interior = axisInteriorSegmentsX(project, axesX, axesY, ax.pos);
               return (
                 <g key={`ax-${ax.id}`}>
-                  {/* Tim chỉ trong lòng ô sàn — không vẽ xuyên / chạm thân dầm */}
+                  {/* Tim trục: gạch–chấm liên tục trong lòng ô */}
                   {interior.map((span, i) => (
                     <line
                       key={`ax-span-${ax.id}-${i}`}
@@ -527,7 +527,7 @@ export function SlabPreview({
                       y2={Y(span.lo)}
                       stroke={stroke}
                       strokeWidth={sw}
-                      strokeDasharray="3 3"
+                      strokeDasharray="7 2 1.5 2"
                       pointerEvents="none"
                     />
                   ))}
@@ -583,7 +583,7 @@ export function SlabPreview({
               const interior = axisInteriorSegmentsY(project, axesX, axesY, ay.pos);
               return (
                 <g key={`ay-${ay.id}`}>
-                  {/* Tim chỉ trong lòng ô sàn — không vẽ xuyên / chạm thân dầm */}
+                  {/* Tim trục: gạch–chấm liên tục trong lòng ô */}
                   {interior.map((span, i) => (
                     <line
                       key={`ay-span-${ay.id}-${i}`}
@@ -593,7 +593,7 @@ export function SlabPreview({
                       y2={cy}
                       stroke={stroke}
                       strokeWidth={sw}
-                      strokeDasharray="3 3"
+                      strokeDasharray="7 2 1.5 2"
                       pointerEvents="none"
                     />
                   ))}
