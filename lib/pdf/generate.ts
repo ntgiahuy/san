@@ -177,7 +177,7 @@ function textInAxisBubble(ctx: Ctx, str: string, cx: number, cy: number, size = 
 }
 
 /**
- * Số hiệu thép: vòng STT + Ødia a spacing trên 1 hàng (đen, không đậm).
+ * Số hiệu thép: vòng STT + Ødia a spacing trên 1 hàng (đỏ, không đậm).
  * dir = phương thanh — chữ song song thanh (X ngang / Y dọc).
  * (cx,cy) = tâm vòng (đã offset khỏi nét thép).
  */
@@ -191,7 +191,7 @@ function drawRebarCallout(
   dir: "X" | "Y" = "X",
 ) {
   const r = REBAR_MARK_R;
-  const color = BLACK;
+  const color = REBAR_RED;
   ctx.page.drawCircle({
     x: cx,
     y: ty(cy),
@@ -236,35 +236,69 @@ function drawRebarCallout(
   return { labelW, gap };
 }
 
-/** Key cùng Ø + khoảng cách → cùng số hiệu. */
-function rebarSpecKey(dia: number, spacing: number) {
-  return `${dia}|${spacing}`;
+/** Cùng Ø + khoảng cách + chiều dài → cùng số hiệu. */
+function rebarSpecKey(dia: number, spacing: number, lengthMm: number) {
+  return `${dia}|${spacing}|${Math.round(lengthMm)}`;
 }
 
-/** STT theo Ø+a (cùng kích thước/đường kính/khoảng cách → 1 số). */
-function rebarSttBySpec(
-  schedule: ScheduleRow[],
-): Map<string, { stt: number; dia: number; spacing: number }> {
-  const map = new Map<string, { stt: number; dia: number; spacing: number }>();
-  let n = 1;
-  for (const row of schedule) {
-    const key = rebarSpecKey(row.dia, row.spacing);
-    if (map.has(key)) continue;
-    map.set(key, { stt: n++, dia: row.dia, spacing: row.spacing });
+function barSegLengthMm(bar: {
+  dir: "X" | "Y";
+  x0?: number;
+  x1?: number;
+  y0?: number;
+  y1?: number;
+}): number {
+  if (bar.dir === "X") return Math.abs((bar.x1 ?? 0) - (bar.x0 ?? 0));
+  return Math.abs((bar.y1 ?? 0) - (bar.y0 ?? 0));
+}
+
+type RebarSttInfo = { stt: number; dia: number; spacing: number; lengthMm: number };
+
+/**
+ * Gán STT 1,2,3… theo (Ø, a, chiều dài).
+ * Cùng bộ → cùng số; khác dài hoặc khác Ø → số khác.
+ */
+function buildRebarSttRegistry(
+  entries: Array<{ dia: number; spacing: number; lengthMm: number }>,
+): Map<string, RebarSttInfo> {
+  const uniq = new Map<string, { dia: number; spacing: number; lengthMm: number }>();
+  for (const e of entries) {
+    const len = Math.round(e.lengthMm);
+    if (!(len > 0)) continue;
+    const key = rebarSpecKey(e.dia, e.spacing, len);
+    if (!uniq.has(key)) uniq.set(key, { dia: e.dia, spacing: e.spacing, lengthMm: len });
   }
+  const sorted = [...uniq.values()].sort(
+    (a, b) =>
+      a.dia - b.dia ||
+      a.spacing - b.spacing ||
+      a.lengthMm - b.lengthMm,
+  );
+  const map = new Map<string, RebarSttInfo>();
+  sorted.forEach((e, i) => {
+    map.set(rebarSpecKey(e.dia, e.spacing, e.lengthMm), {
+      stt: i + 1,
+      dia: e.dia,
+      spacing: e.spacing,
+      lengthMm: e.lengthMm,
+    });
+  });
   return map;
 }
 
-/** STT theo mark (dùng shop/bảng) — lấy STT từ Ø+a của mark đó. */
-function rebarSttByMark(schedule: ScheduleRow[]): Map<string, { stt: number; dia: number; spacing: number }> {
-  const bySpec = rebarSttBySpec(schedule);
-  const map = new Map<string, { stt: number; dia: number; spacing: number }>();
+/** STT theo mark (shop/bảng) — theo Ø+a+chiều dài phát triển của mark. */
+function rebarSttByMark(schedule: ScheduleRow[]): Map<string, RebarSttInfo> {
+  const bySpec = buildRebarSttRegistry(
+    schedule.map((r) => ({ dia: r.dia, spacing: r.spacing, lengthMm: r.barLength })),
+  );
+  const map = new Map<string, RebarSttInfo>();
   for (const row of schedule) {
     if (map.has(row.mark)) continue;
-    const info = bySpec.get(rebarSpecKey(row.dia, row.spacing)) ?? {
+    const info = bySpec.get(rebarSpecKey(row.dia, row.spacing, row.barLength)) ?? {
       stt: map.size + 1,
       dia: row.dia,
       spacing: row.spacing,
+      lengthMm: Math.round(row.barLength),
     };
     map.set(row.mark, info);
   }
@@ -493,15 +527,22 @@ function drawPlan(
     textSimple(ctx, `↓${m.drop}`, toX(m.x) + 4, toY(m.y) - 4, 5.5, false, "left");
   }
 
-  // Số hiệu trên từng thanh: đen, xoay theo phương sắt, giữa thanh; cùng Øa → cùng STT
-  const specStt = rebarSttBySpec(ctx.model.schedule);
+  // Số hiệu trên từng thanh: đỏ; cùng Ø+a+chiều dài → cùng STT; khác dài/Ø → 1,2,3…
   const CALL_GAP = 8;
+  const sttRegistry = buildRebarSttRegistry(
+    bars.map((bar) => {
+      const spec = steelSpecForBar(zones, ctx.model.schedule, bar);
+      return { dia: spec.dia, spacing: spec.spacing, lengthMm: barSegLengthMm(bar) };
+    }),
+  );
   for (const bar of bars) {
     const spec = steelSpecForBar(zones, ctx.model.schedule, bar);
-    const info = specStt.get(rebarSpecKey(spec.dia, spec.spacing)) ?? {
-      stt: specStt.size + 1,
+    const len = Math.round(barSegLengthMm(bar));
+    const info = sttRegistry.get(rebarSpecKey(spec.dia, spec.spacing, len)) ?? {
+      stt: sttRegistry.size + 1,
       dia: spec.dia,
       spacing: spec.spacing,
+      lengthMm: len,
     };
     const label = `Ø${info.dia}a${info.spacing}`;
     const labelW = ctx.font.widthOfTextAtSize(label, 6.2);
