@@ -31,7 +31,7 @@ const GRAY = rgb(0.45, 0.45, 0.45);
 const AXIS_LINE = rgb(0.28, 0.28, 0.28);
 /** Chỉ thép dùng nét đỏ; dầm / khung / tim trục = đen. */
 const REBAR_RED = rgb(0.86, 0.15, 0.15);
-const REBAR_MARK_R = 5.2;
+const REBAR_MARK_R = 4.8;
 /** Vòng số hiệu trục PDF: bán kính + khoảng hở khỏi da dầm. */
 const AXIS_BUBBLE_R = 5.5;
 const AXIS_BUBBLE_GAP = 10;
@@ -176,7 +176,10 @@ function textInAxisBubble(ctx: Ctx, str: string, cx: number, cy: number, size = 
   textInkCentered(ctx, str, cx, cy, size, BLACK, true);
 }
 
-/** Số thứ tự thép trong vòng tròn đỏ + Ødia a spacing. */
+/**
+ * Số hiệu thép: vòng STT + Ødia a spacing trên 1 hàng (không đậm).
+ * cx,cy = tâm vòng; textSide = phía chữ so với vòng.
+ */
 function drawRebarCallout(
   ctx: Ctx,
   cx: number,
@@ -184,16 +187,40 @@ function drawRebarCallout(
   stt: number,
   dia: number,
   spacing: number,
+  textSide: "left" | "right" = "right",
 ) {
+  const r = REBAR_MARK_R;
   ctx.page.drawCircle({
     x: cx,
     y: ty(cy),
-    size: REBAR_MARK_R,
+    size: r,
     borderColor: REBAR_RED,
-    borderWidth: 0.75,
+    borderWidth: 0.35,
   });
-  textInkCentered(ctx, String(stt), cx, cy, 6.2, REBAR_RED, true);
-  textSimple(ctx, `Ø${dia}a${spacing}`, cx + REBAR_MARK_R + 3, cy + 2, 6.5, true, "left", REBAR_RED);
+  const sttStr = String(stt);
+  const sttSize = 5.6;
+  const sttW = ctx.font.widthOfTextAtSize(sttStr, sttSize);
+  ctx.page.drawText(sttStr, {
+    x: cx - sttW / 2,
+    y: ty(cy) - sttSize * 0.35,
+    size: sttSize,
+    font: ctx.font,
+    color: REBAR_RED,
+  });
+
+  const label = `Ø${dia}a${spacing}`;
+  const labelSize = 6.2;
+  const labelW = ctx.font.widthOfTextAtSize(label, labelSize);
+  const gap = 2.5;
+  const lx =
+    textSide === "right" ? cx + r + gap : cx - r - gap - labelW;
+  ctx.page.drawText(label, {
+    x: lx,
+    y: ty(cy) - labelSize * 0.35,
+    size: labelSize,
+    font: ctx.font,
+    color: REBAR_RED,
+  });
 }
 
 /** STT thép theo thứ tự bảng thống kê (cùng số hiệu → cùng STT). */
@@ -341,7 +368,7 @@ function drawPlan(
     textInAxisBubble(ctx, ay.name, bx, y);
   }
 
-  // —— Dầm: da ngoài (biên sàn) nét liền; da trong (vào ô) nét đứt ——
+  // —— Dầm: da ngoài (biên sàn) nét liền; da trong (vào ô) nét đứt (không ghi tên dầm) ——
   for (const b of project.beams) {
     drawBeam(ctx, b, toX, toY, bleed);
   }
@@ -381,7 +408,8 @@ function drawPlan(
   // —— Thép sàn (chỉ nét đỏ) + vòng STT + Øa ——
   const hook = SLAB_REBAR_HOOK_MM;
   const pressAmber = rgb(0.9, 0.55, 0.1);
-  for (const bar of stripRebarBarSegments(project, axesX, axesY)) {
+  const bars = stripRebarBarSegments(project, axesX, axesY);
+  for (const bar of bars) {
     if (bar.dir === "X") {
       line(ctx, toX(bar.x0), toY(bar.y), toX(bar.x1), toY(bar.y), 0.55, REBAR_RED);
       line(ctx, toX(bar.x0), toY(bar.y), toX(bar.x0), toY(bar.y - hook), 0.55, REBAR_RED);
@@ -406,22 +434,82 @@ function drawPlan(
     textSimple(ctx, `↓${m.drop}`, toX(m.x) + 4, toY(m.y) - 4, 5.5, false, "left");
   }
 
-  // Số hiệu thép: vòng tròn STT + Ødia a spacing (đỏ)
+  // Số hiệu thép: vòng STT + Øa trên 1 hàng, kề thanh thép (không chạm)
   const sttMap = rebarSttByMark(ctx.model.schedule);
+  /** Khoảng hở mép vòng ↔ nét thép (pt). */
+  const CALL_GAP = 8;
   for (const z of zones) {
     const info = sttMap.get(z.mark) ?? {
       stt: sttMap.size + 1,
       dia: z.dia,
       spacing: z.spacing,
     };
-    const mx = (Math.min(z.x1, z.x2) + Math.max(z.x1, z.x2)) / 2;
-    const my = (Math.min(z.y1, z.y2) + Math.max(z.y1, z.y2)) / 2;
-    // Tách 4 số hiệu (MC/MT × X/Y) khỏi tâm ô để không chồng
-    const dy =
-      z.direction === "X" ? (z.layer === "top" ? -20 : 18) : z.layer === "top" ? -36 : 36;
-    const dx =
-      z.direction === "Y" ? (z.layer === "top" ? 28 : -34) : z.layer === "top" ? -22 : 22;
-    drawRebarCallout(ctx, toX(mx) + dx, toY(my) + dy, info.stt, info.dia, info.spacing);
+    const zx0 = Math.min(z.x1, z.x2);
+    const zx1 = Math.max(z.x1, z.x2);
+    const zy0 = Math.min(z.y1, z.y2);
+    const zy1 = Math.max(z.y1, z.y2);
+    const along = z.layer === "top" ? 0.62 : 0.38;
+
+    let cx: number;
+    let cy: number;
+    let textSide: "left" | "right" = "right";
+
+    if (z.direction === "X") {
+      const match = bars.filter(
+        (b): b is Extract<(typeof bars)[number], { dir: "X" }> =>
+          b.dir === "X" &&
+          b.y >= zy0 - 1 &&
+          b.y <= zy1 + 1 &&
+          Math.min(b.x1, b.x0) < zx1 &&
+          Math.max(b.x1, b.x0) > zx0,
+      );
+      const bar = match[Math.floor(match.length / 2)] ?? match[0];
+      if (bar) {
+        const mmX = Math.max(bar.x0, Math.min(bar.x1, zx0 + (zx1 - zx0) * along));
+        cx = toX(mmX);
+        const barY = toY(bar.y);
+        // top → phía trên thanh; bottom → phía dưới (yTop tăng xuống)
+        const side = z.layer === "top" ? -1 : 1;
+        cy = barY + side * (REBAR_MARK_R + CALL_GAP);
+      } else {
+        cx = toX(zx0 + (zx1 - zx0) * along);
+        cy = toY((zy0 + zy1) / 2) + (z.layer === "top" ? -14 : 14);
+      }
+    } else {
+      const match = bars.filter(
+        (b): b is Extract<(typeof bars)[number], { dir: "Y" }> =>
+          b.dir === "Y" &&
+          b.x >= zx0 - 1 &&
+          b.x <= zx1 + 1 &&
+          Math.min(b.y1, b.y0) < zy1 &&
+          Math.max(b.y1, b.y0) > zy0,
+      );
+      const bar = match[Math.floor(match.length / 2)] ?? match[0];
+      // Luôn [vòng][Øa]; đặt cả cụm bên phải hoặc bên trái thanh
+      const label = `Ø${info.dia}a${info.spacing}`;
+      const labelW = ctx.font.widthOfTextAtSize(label, 6.2);
+      const rowW = REBAR_MARK_R * 2 + 2.5 + labelW;
+      if (bar) {
+        const mmY = Math.max(bar.y0, Math.min(bar.y1, zy0 + (zy1 - zy0) * along));
+        cy = toY(mmY);
+        const barX = toX(bar.x);
+        const placeLeft = z.layer === "top";
+        if (placeLeft) {
+          // mép phải của chữ cách thanh CALL_GAP; vòng nằm bên trái chữ
+          const rightEdge = barX - CALL_GAP;
+          cx = rightEdge - labelW - 2.5 - REBAR_MARK_R;
+        } else {
+          cx = barX + CALL_GAP + REBAR_MARK_R;
+        }
+        textSide = "right";
+      } else {
+        const placeLeft = z.layer === "top";
+        cx = toX((zx0 + zx1) / 2) + (placeLeft ? -(rowW / 2 + 10) : rowW / 2 + 10);
+        cy = toY(zy0 + (zy1 - zy0) * along);
+        textSide = "right";
+      }
+    }
+    drawRebarCallout(ctx, cx, cy, info.stt, info.dia, info.spacing, textSide);
   }
 
   const dimBottomY = edgeBottom + AXIS_BUBBLE_OFFSET + AXIS_BUBBLE_R + 8;
@@ -551,9 +639,6 @@ function drawBeam(
 ) {
   const { project } = ctx;
   const segs = beamSegments(project, b);
-  let labelX = 0;
-  let labelY = 0;
-  let labelN = 0;
   const eps = 2; // mm — nhận diện da trùng biên sàn
 
   for (const seg of segs) {
@@ -590,8 +675,6 @@ function drawBeam(
         hiOuter ? undefined : BEAM_INNER_DASH,
         project,
       );
-      labelX += toX(Math.max(hi0, hi1)) + 6;
-      labelY += (toY(lo) + toY(hi)) / 2;
     } else {
       const loMid = (lo0 + lo1) / 2;
       const hiMid = (hi0 + hi1) / 2;
@@ -621,20 +704,7 @@ function drawBeam(
         hiOuter ? undefined : BEAM_INNER_DASH,
         project,
       );
-      labelX += (toX(lo) + toX(hi)) / 2;
-      labelY += toY(Math.max(hi0, hi1)) - 6;
     }
-    labelN += 1;
-  }
-  if (labelN === 0) return;
-
-  const lx = labelX / labelN;
-  const ly = labelY / labelN;
-  const tag = `${b.name}(${b.size})`;
-  if (b.direction === "Y") {
-    textVertical(ctx, tag, lx, ly, 5.8, false);
-  } else {
-    textSimple(ctx, tag, lx, ly, 5.8, false, "center");
   }
 }
 
