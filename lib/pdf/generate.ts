@@ -884,8 +884,7 @@ function drawPlan(
     drawDistArrow(ctx, pxB, pyB, pxA, pyA);
     // Chấm trắng tại giao với thanh thép cùng zone (giống bản CAD)
     for (const bar of bars) {
-      if (bar.dir !== z.direction) continue;
-      if (z.direction === "X") {
+      if (bar.dir === "X" && z.direction === "X") {
         // Thanh ngang cắt đường khoảng rải đứng tại (mx, bar.y)
         if (bar.y < zy0 - 1 || bar.y > zy1 + 1) continue;
         const bx0 = Math.min(bar.x0, bar.x1);
@@ -899,7 +898,7 @@ function drawPlan(
           borderColor: DIST_BLUE,
           borderWidth: 0.65,
         });
-      } else {
+      } else if (bar.dir === "Y" && z.direction === "Y") {
         if (bar.x < zx0 - 1 || bar.x > zx1 + 1) continue;
         const by0 = Math.min(bar.y0, bar.y1);
         const by1 = Math.max(bar.y0, bar.y1);
