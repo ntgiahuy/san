@@ -4,7 +4,13 @@ import type {
   RebarZone,
   SlabProject,
 } from "./types";
-import { ensureAxes } from "./grid";
+import {
+  ensureAxes,
+  slabDistRangeForBar,
+  sortAxes,
+  stripRebarBarSegments,
+  type RebarBarSeg,
+} from "./grid";
 import { createSampleS1 } from "./sample";
 import { uid } from "./utils";
 
@@ -78,9 +84,18 @@ function zoneSpanMm(zone: RebarZone): { length: number; width: number } {
   return { length: Math.max(dy - 2 * zone.cover, 0), width: Math.max(dx - 2 * zone.cover, 0) };
 }
 
+/**
+ * Số lượng thanh = chiều dài khoảng rải / khoảng cách a (làm tròn).
+ * Khớp bảng thống kê: 1 CK = L_khoảng_rải / a.
+ */
+export function barsFromDistLength(distMm: number, spacing: number) {
+  if (spacing <= 0 || distMm <= 0) return 0;
+  return Math.max(1, Math.round(distMm / spacing));
+}
+
+/** @deprecated dùng barsFromDistLength — giữ alias cho chỗ gọi cũ. */
 function barCount(width: number, spacing: number) {
-  if (spacing <= 0 || width <= 0) return 0;
-  return Math.max(1, Math.floor(width / spacing) + 1);
+  return barsFromDistLength(width, spacing);
 }
 
 function barDevelopedLength(straight: number, leftHook: number, rightHook: number) {
@@ -90,7 +105,7 @@ function barDevelopedLength(straight: number, leftHook: number, rightHook: numbe
 export function scheduleFromZone(zone: RebarZone, quantity: number): ScheduleRow | null {
   const { length, width } = zoneSpanMm(zone);
   if (length < 50 || width < 50) return null;
-  const qtyEach = barCount(width, zone.spacing);
+  const qtyEach = barsFromDistLength(width, zone.spacing);
   const barLength = barDevelopedLength(length, zone.leftHook, zone.rightHook);
   const qtyTotal = qtyEach * Math.max(1, quantity);
   const totalM = (barLength * qtyTotal) / 1000;
@@ -292,12 +307,68 @@ export function effectiveZones(project: SlabProject): RebarZone[] {
   return applyPresetZones(project);
 }
 
+/**
+ * 1 CK từ khoảng rải mặt bằng: với mỗi thanh strip thuộc zone,
+ * cộng (L_khoảng_rải / a). L = mí dầm trong − 50 hai đầu.
+ */
+export function qtyEachFromDistRanges(
+  project: SlabProject,
+  zone: RebarZone,
+  bars?: RebarBarSeg[],
+): number {
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+  if (axesX.length < 2 || axesY.length < 2) {
+    const { width } = zoneSpanMm(zone);
+    return barsFromDistLength(width, zone.spacing);
+  }
+  const segs = bars ?? stripRebarBarSegments(project, axesX, axesY);
+  const zx0 = Math.min(zone.x1, zone.x2);
+  const zx1 = Math.max(zone.x1, zone.x2);
+  const zy0 = Math.min(zone.y1, zone.y2);
+  const zy1 = Math.max(zone.y1, zone.y2);
+  let total = 0;
+  let matched = 0;
+  for (const bar of segs) {
+    if (bar.dir !== zone.direction) continue;
+    const mx = bar.dir === "X" ? (bar.x0 + bar.x1) / 2 : bar.x;
+    const my = bar.dir === "X" ? bar.y : (bar.y0 + bar.y1) / 2;
+    if (mx < zx0 - 1 || mx > zx1 + 1 || my < zy0 - 1 || my > zy1 + 1) continue;
+    const dist = slabDistRangeForBar(project, axesX, axesY, bar);
+    if (!dist || !(dist.lenMm > 1)) continue;
+    total += barsFromDistLength(dist.lenMm, zone.spacing);
+    matched += 1;
+  }
+  if (matched > 0) return Math.max(1, total);
+  const { width } = zoneSpanMm(zone);
+  return barsFromDistLength(width, zone.spacing);
+}
+
 export function computeModel(project: SlabProject): ComputedSlabModel {
   const zones = effectiveZones(project);
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+  const bars =
+    axesX.length >= 2 && axesY.length >= 2
+      ? stripRebarBarSegments(project, axesX, axesY)
+      : [];
   const schedule: ScheduleRow[] = [];
   for (const z of zones) {
     const row = scheduleFromZone(z, project.info.quantity);
-    if (row) schedule.push(row);
+    if (!row) continue;
+    // 1 CK = Σ (L khoảng rải / a) theo thanh mặt bằng
+    const qtyEach = qtyEachFromDistRanges(project, z, bars);
+    const qtyMembers = Math.max(1, project.info.quantity);
+    const qtyTotal = qtyEach * qtyMembers;
+    const totalM = (row.barLength * qtyTotal) / 1000;
+    schedule.push({
+      ...row,
+      qtyEach,
+      qtyMembers,
+      qtyTotal,
+      totalM,
+      weight: totalM * weightPerMeter(row.dia),
+    });
   }
   schedule.sort((a, b) => a.mark.localeCompare(b.mark, "vi"));
 
