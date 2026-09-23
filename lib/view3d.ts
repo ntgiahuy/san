@@ -286,11 +286,12 @@ export function buildBeamFrameScene(project: SlabProject): Scene3D {
   const openingXs: Array<[Pt3, Pt3]> = [];
   const marks: LevelMark3[] = [];
 
-  let maxH = 500;
-  for (const b of project.beams ?? []) maxH = Math.max(maxH, parseBH(b.size).h);
-  const colDrop = Math.round(maxH * 1.35);
   const zTop = 0;
-  const zColBot = -maxH - colDrop;
+  /** Cột stub: +50cm trên mặt sàn, −1m dưới mặt sàn (mm mặt bằng 3D). */
+  const COL_ABOVE_SLAB_MM = 500;
+  const COL_BELOW_SLAB_MM = 1000;
+  const zColTop = zTop + COL_ABOVE_SLAB_MM;
+  const zColBot = zTop - COL_BELOW_SLAB_MM;
 
   let ci = 0;
   for (const ax of axesX) {
@@ -305,7 +306,17 @@ export function buildBeamFrameScene(project: SlabProject): Scene3D {
       let half = 150;
       for (const b of beamsAt) half = Math.max(half, parseBH(b.size).b / 2);
       half = Math.round(half);
-      solids.push(rectSolid(`col-${ci++}`, ax.pos - half, ay.pos - half, ax.pos + half, ay.pos + half, zColBot, zTop));
+      solids.push(
+        rectSolid(
+          `col-${ci++}`,
+          ax.pos - half,
+          ay.pos - half,
+          ax.pos + half,
+          ay.pos + half,
+          zColBot,
+          zColTop,
+        ),
+      );
     }
   }
 
