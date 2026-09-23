@@ -4,7 +4,7 @@
 import { createSampleS1 } from "./lib/sample";
 import {
   ensureBeamsSplitBays,
-  groupTypicalRebarBars,
+  groupTypicalRebarByBayStrip,
   patchBeamAllSegShifts,
   rebarBarStraightLenMm,
   sortAxes,
@@ -43,24 +43,28 @@ const xSpan = Math.max(...xLens) - Math.min(...xLens);
 assert(ySpan > 200, `Y lengths should vary with skewed top/bottom, span=${ySpan}`);
 assert(xSpan > 50, `X lengths should vary with skewed left, span=${xSpan}`);
 
-const groups = groupTypicalRebarBars(p, bars, p.zones);
+const groups = groupTypicalRebarByBayStrip(p, bars, axesX, axesY, p.zones);
 const yGroups = groups.filter((g) => g.typical.dir === "Y");
 const xGroups = groups.filter((g) => g.typical.dir === "X");
-assert(yGroups.length >= 2, `expected ≥2 Y length types, got ${yGroups.length}`);
-assert(xGroups.length >= 2, `expected ≥2 X length types, got ${xGroups.length}`);
+assert(yGroups.length >= 2, `expected ≥2 Y strips, got ${yGroups.length}`);
+assert(xGroups.length >= 1, `expected ≥1 X strip, got ${xGroups.length}`);
 
 const model = computeModel(p);
 const botY = model.schedule.filter((r) => r.layer === "bottom" && r.direction === "Y");
 assert(botY.length >= 2, `schedule should list multiple Y lengths, got ${botY.length}`);
 const schLens = botY.map((r) => r.barLength);
 assert(Math.max(...schLens) - Math.min(...schLens) > 100, "schedule Y lengths should differ");
+assert(
+  botY.some((r) => /[a-c]$/i.test(r.mark)),
+  `expected suffix marks like Aa, got ${botY.map((r) => r.mark).join(",")}`,
+);
 
 console.log("OK skew rebar vary", {
   xBars: xBars.length,
   yBars: yBars.length,
-  xTypes: xGroups.length,
-  yTypes: yGroups.length,
+  xStrips: xGroups.length,
+  yStrips: yGroups.length,
   ySpan,
   xSpan,
-  scheduleY: botY.map((r) => ({ L: r.barLength, qty: r.qtyEach })),
+  scheduleY: botY.map((r) => ({ mark: r.mark, L: r.barLength, qty: r.qtyEach })),
 });
