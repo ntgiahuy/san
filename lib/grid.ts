@@ -1724,6 +1724,93 @@ export function rebarHookSegments(
   return out;
 }
 
+/** Khóa đồng nhất: chiều dài + Ø + móc trái/phải (+ phương). */
+export function rebarBarIdentityKey(
+  project: SlabProject,
+  bar: RebarBarSeg,
+  zones?: RebarZone[],
+): string {
+  const list = zones ?? project.zones ?? [];
+  const len =
+    bar.dir === "X"
+      ? Math.round(bar.x1 - bar.x0)
+      : Math.round(bar.y1 - bar.y0);
+  const hooks = hooksForRebarBar(project, bar, list);
+  const mx = bar.dir === "X" ? (bar.x0 + bar.x1) / 2 : bar.x;
+  const my = bar.dir === "X" ? bar.y : (bar.y0 + bar.y1) / 2;
+  const hits = list.filter((z) => {
+    if (z.direction !== bar.dir) return false;
+    const zx0 = Math.min(z.x1, z.x2);
+    const zx1 = Math.max(z.x1, z.x2);
+    const zy0 = Math.min(z.y1, z.y2);
+    const zy1 = Math.max(z.y1, z.y2);
+    return mx >= zx0 - 1 && mx <= zx1 + 1 && my >= zy0 - 1 && my <= zy1 + 1;
+  });
+  const z = hits.find((h) => h.layer === "bottom") ?? hits[0];
+  const dia = z ? Math.round(Number(z.dia) || 0) : 0;
+  return `${bar.dir}|L${len}|Ø${dia}|H${hooks.left}/${hooks.right}`;
+}
+
+export type TypicalRebarGroup = {
+  /** Các thanh liên tiếp cùng loại trong nhóm. */
+  bars: RebarBarSeg[];
+  /** Cây điển hình để vẽ / ghi số hiệu. */
+  typical: RebarBarSeg;
+};
+
+/**
+ * Gộp thanh kề nhau liên tiếp cùng chiều dài + Ø + móc.
+ * Xen kẽ thanh khác loại → tách nhóm. Mỗi nhóm chỉ hiện 1 cây điển hình.
+ */
+export function groupTypicalRebarBars(
+  project: SlabProject,
+  bars: RebarBarSeg[],
+  zones?: RebarZone[],
+): TypicalRebarGroup[] {
+  const list = zones ?? project.zones ?? [];
+  const groups: TypicalRebarGroup[] = [];
+
+  for (const dir of ["X", "Y"] as const) {
+    const items = bars
+      .filter((b) => b.dir === dir)
+      .map((bar) => ({
+        bar,
+        key: rebarBarIdentityKey(project, bar, list),
+        pos: bar.dir === "X" ? bar.y : bar.x,
+      }))
+      .sort((a, b) => a.pos - b.pos || a.key.localeCompare(b.key));
+
+    let run: typeof items = [];
+    const flush = () => {
+      if (!run.length) return;
+      const mid = run[Math.floor((run.length - 1) / 2)]!.bar;
+      groups.push({ bars: run.map((r) => r.bar), typical: mid });
+      run = [];
+    };
+
+    for (const item of items) {
+      if (!run.length || run[run.length - 1]!.key === item.key) {
+        run.push(item);
+      } else {
+        flush();
+        run.push(item);
+      }
+    }
+    flush();
+  }
+
+  return groups;
+}
+
+/** Danh sách cây điển hình (1 thanh / nhóm liên tiếp cùng loại). */
+export function typicalRebarBars(
+  project: SlabProject,
+  bars: RebarBarSeg[],
+  zones?: RebarZone[],
+): RebarBarSeg[] {
+  return groupTypicalRebarBars(project, bars, zones).map((g) => g.typical);
+}
+
 /** Đọc B / H / B1 từ info (kèm fallback chuỗi beamSize cũ). */
 export function beamDims(info: SlabInfo): { B: number; H: number; B1: number } {
   const fromStr = (size?: string) => {

@@ -29,6 +29,7 @@ import {
   buildMergedDistRanges,
   hooksForRebarBar,
   rebarHookSegments,
+  typicalRebarBars,
 } from "../grid";
 import type { GridAxis, PlanBeam, RebarZone, SlabProject } from "../types";
 import { buildBeamFrameScene, projectSceneToSvg } from "../view3d";
@@ -857,7 +858,9 @@ function drawPlan(
   const pressAmber = rgb(0.9, 0.55, 0.1);
   const bars = stripRebarBarSegments(project, axesX, axesY);
   const rebarZones = effectiveZones(project);
-  for (const bar of bars) {
+  /** Chỉ vẽ / ghi số hiệu 1 cây điển hình / dải thanh giống nhau kề nhau. */
+  const drawBars = typicalRebarBars(project, bars, rebarZones);
+  for (const bar of drawBars) {
     const { left: leftHook, right: rightHook } = hooksForRebarBar(project, bar, rebarZones);
     if (bar.dir === "X") {
       line(ctx, toX(bar.x0), toY(bar.y), toX(bar.x1), toY(bar.y), 0.55, REBAR_RED);
@@ -888,10 +891,10 @@ function drawPlan(
     textSimple(ctx, `↓${m.drop}`, toX(m.x) + 4, toY(m.y) - 4, 5.5, false, "left");
   }
 
-  // Số hiệu trên từng thanh: đỏ; dài giống thống kê → cùng STT; đoạn ngắn → STT mới
+  // Số hiệu trên từng cây điển hình
   const CALL_GAP = 8;
   const sttRegistry = unifiedSttRegistry(ctx.model.schedule, bars, zones);
-  for (const bar of bars) {
+  for (const bar of drawBars) {
     const info = sttInfoForPlanBar(ctx.model.schedule, sttRegistry, zones, bar);
     const label = `Ø${info.dia}a${info.spacing}`;
     const labelW = ctx.font.widthOfTextAtSize(label, 6.2);
@@ -935,6 +938,9 @@ function drawPlan(
       return `${bar.dir}|${spec.dia}|${spec.spacing}`;
     };
     const merged = buildMergedDistRanges(project, axesX, axesY, bars, markKeyOf);
+    const typicalSet = new Set(
+      drawBars.map((b) => (b.dir === "X" ? `X:${Math.round(b.y)}` : `Y:${Math.round(b.x)}`)),
+    );
     for (const seg of merged) {
       const pxA = toX(seg.xA);
       const pyA = toY(seg.yA);
@@ -958,7 +964,11 @@ function drawPlan(
       drawDistEndCap(ctx, pxA, pyA, pxB, pyB);
       drawDistEndCap(ctx, pxB, pyB, pxA, pyA);
       for (const j of seg.junctions) {
-        drawDistBarJunction(ctx, toX(j.x), toY(j.y));
+        const keep =
+          seg.dir === "X"
+            ? typicalSet.has(`X:${Math.round(j.y)}`)
+            : typicalSet.has(`Y:${Math.round(j.x)}`);
+        if (keep) drawDistBarJunction(ctx, toX(j.x), toY(j.y));
       }
       const label = String(Math.round(seg.lenMm));
       const alongY = Math.abs(seg.yB - seg.yA) >= Math.abs(seg.xB - seg.xA);

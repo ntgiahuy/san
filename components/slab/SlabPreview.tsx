@@ -22,6 +22,7 @@ import {
   buildMergedDistRanges,
   hooksForRebarBar,
   rebarHookSegments,
+  typicalRebarBars,
 } from "@/lib/grid";
 import type { PlanSelection, SlabProject } from "@/lib/types";
 import { buildBeamFrameScene, projectSceneToSvg } from "@/lib/view3d";
@@ -710,12 +711,14 @@ export function SlabPreview({
             {beamNodes}
             {(() => {
               const bars = stripRebarBarSegments(project, axesX, axesY);
+              /** Chỉ vẽ 1 cây điển hình / dải thanh giống nhau kề nhau. */
+              const drawBars = typicalRebarBars(project, bars, zones);
               const stroke = "#ef4444";
               const pressMarks = stripRebarPressMarks(project, axesX, axesY);
               const tick = 70;
               return (
                 <>
-                  {bars.map((bar, i) => {
+                  {drawBars.map((bar, i) => {
                     const { left: leftHook, right: rightHook } = hooksForRebarBar(project, bar, zones);
                     const hooks = rebarHookSegments(
                       bar,
@@ -872,6 +875,11 @@ export function SlabPreview({
                         return `${bar.dir}|10|150`;
                       };
                       const merged = buildMergedDistRanges(project, axesX, axesY, bars, markKeyOf);
+                      const typicalSet = new Set(
+                        drawBars.map((b) =>
+                          b.dir === "X" ? `X:${Math.round(b.y)}` : `Y:${Math.round(b.x)}`,
+                        ),
+                      );
                       const ah = 7; // ×0.5
                       const aw = 3.5;
                       const capHalf = 5.5;
@@ -923,6 +931,12 @@ export function SlabPreview({
                         const inset = Math.min(ah, plen * 0.35);
                         const jr = 3.2;
                         const jd = jr * 0.72;
+                        // Chỉ chấm tại cây điển hình (không chấm thanh đã ẩn)
+                        const junctions = seg.junctions.filter((j) =>
+                          seg.dir === "X"
+                            ? typicalSet.has(`X:${Math.round(j.y)}`)
+                            : typicalSet.has(`Y:${Math.round(j.x)}`),
+                        );
                         return (
                           <g key={`dist-${si}`} pointerEvents="none">
                             <line
@@ -935,7 +949,7 @@ export function SlabPreview({
                             />
                             {endCap(sxA, syA, sxB, syB, `a-${si}`)}
                             {endCap(sxB, syB, sxA, syA, `b-${si}`)}
-                            {seg.junctions.map((j, ji) => (
+                            {junctions.map((j, ji) => (
                               <g key={`j-${si}-${ji}`}>
                                 {/* Chấm hình 2: vòng trắng + kim cương tại giao khoảng rải ∩ thép sàn */}
                                 <circle
