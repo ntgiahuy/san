@@ -7,6 +7,7 @@ import type {
   SlabInfo,
   SlabProject,
 } from "./types";
+import { rebarLayerMark } from "./types";
 import { applyAxesToProject, defaultAxesX, defaultAxesY } from "./grid";
 import { uid } from "./utils";
 
@@ -102,7 +103,7 @@ function sampleZones(): RebarZone[] {
   return [
     {
       id: uid("zone"),
-      mark: "MC 1-1",
+      mark: rebarLayerMark("bottom"),
       layer: "bottom",
       direction: "X",
       dia: 10,
@@ -120,7 +121,7 @@ function sampleZones(): RebarZone[] {
     },
     {
       id: uid("zone"),
-      mark: "MT 1-1",
+      mark: rebarLayerMark("top"),
       layer: "top",
       direction: "X",
       dia: 10,

@@ -5,6 +5,13 @@ export const SPACING_OPTIONS = [100, 125, 150, 175, 200, 250, 300];
 
 export type RebarLayer = "bottom" | "top" | "structural";
 export type RebarDir = "X" | "Y";
+
+/** Tên vùng thép theo lớp: Lớp dưới / Lớp trên / Cấu tạo. */
+export function rebarLayerMark(layer: RebarLayer): string {
+  if (layer === "top") return "Lớp trên";
+  if (layer === "structural") return "Cấu tạo";
+  return "Lớp dưới";
+}
 export type LayoutPreset = "manual" | "simple2" | "economy2";
 export type BarShapeKind = "straight" | "hooked" | "mesh";
 

@@ -4,6 +4,7 @@ import type {
   RebarZone,
   SlabProject,
 } from "./types";
+import { rebarLayerMark } from "./types";
 import {
   ensureAxes,
   slabDistRangeForBar,
@@ -148,7 +149,7 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
     return [
       {
         id: "preset-simple2-bot-x",
-        mark: "MC 1-1",
+        mark: rebarLayerMark("bottom"),
         layer: "bottom",
         direction: "X",
         dia: bot.dia,
@@ -162,7 +163,7 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
       },
       {
         id: "preset-simple2-bot-y",
-        mark: "MC 2-2",
+        mark: rebarLayerMark("bottom"),
         layer: "bottom",
         direction: "Y",
         dia: bot.dia,
@@ -176,7 +177,7 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
       },
       {
         id: "preset-simple2-top-x",
-        mark: "MT 1-1",
+        mark: rebarLayerMark("top"),
         layer: "top",
         direction: "X",
         dia: top.dia,
@@ -190,7 +191,7 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
       },
       {
         id: "preset-simple2-top-y",
-        mark: "MT 2-2",
+        mark: rebarLayerMark("top"),
         layer: "top",
         direction: "Y",
         dia: top.dia,
@@ -220,7 +221,7 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
   const zones: RebarZone[] = [
     {
       id: "preset-economy2-bot-x",
-      mark: "MC 1-1",
+      mark: rebarLayerMark("bottom"),
       layer: "bottom",
       direction: "X",
       dia: bot.dia,
@@ -234,7 +235,7 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
     },
     {
       id: "preset-economy2-bot-y",
-      mark: "MC 2-2",
+      mark: rebarLayerMark("bottom"),
       layer: "bottom",
       direction: "Y",
       dia: bot.dia,
@@ -248,7 +249,7 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
     },
     {
       id: "preset-economy2-ct",
-      mark: "CT 1",
+      mark: rebarLayerMark("structural"),
       layer: "structural",
       direction: hatDir === "X" ? "Y" : "X",
       dia: st.dia,
@@ -265,7 +266,7 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
   if (hatDir === "X") {
     zones.push({
       id: "preset-economy2-hat",
-      mark: "MT 1-1",
+      mark: rebarLayerMark("top"),
       layer: "top",
       direction: "X",
       dia: top.dia,
@@ -284,7 +285,7 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
   } else {
     zones.push({
       id: "preset-economy2-hat",
-      mark: "MT 1-1",
+      mark: rebarLayerMark("top"),
       layer: "top",
       direction: "Y",
       dia: top.dia,

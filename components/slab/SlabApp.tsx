@@ -83,16 +83,17 @@ import {
   type RebarZone,
   type SlabProject,
   type TabId,
+  rebarLayerMark,
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
 const STORE_KEY = "thep-san-project-v1";
 
-function draftZone(mark = "MC 1-1"): RebarZone {
+function draftZone(layer: RebarLayer = "bottom"): RebarZone {
   return {
     id: uid("zone"),
-    mark,
-    layer: "bottom",
+    mark: rebarLayerMark(layer),
+    layer,
     direction: "X",
     dia: 10,
     spacing: 200,
@@ -269,7 +270,12 @@ export function SlabApp() {
   function persist(next: SlabProject) {
     // Dầm cắt qua ô phải có trục — tránh chọn ô sàn dính liền băng qua dầm
     // Tên dầm mặt bằng chỉ trong Danh sách dầm
-    const normalized = clampPlanBeamNamesToCatalog(ensureBeamsSplitBays(next));
+    // Đồng bộ tên vùng thép theo lớp (Lớp dưới / Lớp trên)
+    const withMarks: SlabProject = {
+      ...next,
+      zones: (next.zones ?? []).map((z) => ({ ...z, mark: rebarLayerMark(z.layer) })),
+    };
+    const normalized = clampPlanBeamNamesToCatalog(ensureBeamsSplitBays(withMarks));
     setProject(normalized);
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(normalized));
@@ -1113,7 +1119,8 @@ export function SlabApp() {
   }
 
   function addZone() {
-    const z = { ...zoneForm, id: uid("zone") };
+    const layer = zoneForm.layer;
+    const z = { ...zoneForm, id: uid("zone"), mark: rebarLayerMark(layer), layer };
     persist({
       ...project,
       layoutPreset: "manual",
@@ -1121,17 +1128,24 @@ export function SlabApp() {
       zones: [...project.zones, z],
     });
     setSelectedZoneId(z.id);
+    setZoneForm(z);
     setStatus(`Đã thêm ${z.mark}`);
   }
 
   function editZone() {
     if (!selectedZoneId) return;
+    const nextForm = {
+      ...zoneForm,
+      id: selectedZoneId,
+      mark: rebarLayerMark(zoneForm.layer),
+    };
     persist({
       ...project,
       layoutPreset: "manual",
-      info: { ...project.info, cover: zoneForm.cover },
-      zones: project.zones.map((z) => (z.id === selectedZoneId ? { ...zoneForm, id: selectedZoneId } : z)),
+      info: { ...project.info, cover: nextForm.cover },
+      zones: project.zones.map((z) => (z.id === selectedZoneId ? nextForm : z)),
     });
+    setZoneForm(nextForm);
     setStatus("Đã cập nhật vùng thép.");
   }
 
@@ -2186,7 +2200,10 @@ export function SlabApp() {
                     <select
                       className="h-7 w-full min-w-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
                       value={zoneForm.layer}
-                      onChange={(e) => setZoneForm({ ...zoneForm, layer: e.target.value as RebarLayer })}
+                      onChange={(e) => {
+                        const layer = e.target.value as RebarLayer;
+                        setZoneForm({ ...zoneForm, layer, mark: rebarLayerMark(layer) });
+                      }}
                     >
                       <option value="bottom">Lớp dưới</option>
                       <option value="top">Lớp trên</option>
@@ -2242,11 +2259,11 @@ export function SlabApp() {
                         }`}
                         onClick={() => {
                           setSelectedZoneId(z.id);
-                          setZoneForm(z);
+                          setZoneForm({ ...z, mark: rebarLayerMark(z.layer) });
                           setPreset("manual");
                         }}
                       >
-                        {z.mark} · Ø{z.dia}a{z.spacing} · {z.direction}
+                        {rebarLayerMark(z.layer)} · Ø{z.dia}a{z.spacing} · {z.direction}
                       </button>
                     </li>
                   ))}
