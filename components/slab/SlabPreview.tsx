@@ -22,6 +22,7 @@ import {
   buildMergedDistRanges,
   distRangeJunctionsOnBars,
   hooksForRebarBar,
+  rebarBarStraightLenMm,
   rebarHookSegments,
   typicalLayeredRebarBars,
   faceChainAlongX,
@@ -1044,8 +1045,15 @@ export const SlabPreview = memo(function SlabPreview({
                           return mx >= zx0 - 1 && mx <= zx1 + 1 && my >= zy0 - 1 && my <= zy1 + 1;
                         });
                         const z = hits.find((h) => h.layer === "bottom") ?? hits[0];
-                        if (z) return `${z.mark}|${z.dia}|${z.spacing}|${z.direction}`;
-                        return `${bar.dir}|10|150`;
+                        const hooks = hooksForRebarBar(project, bar, zones);
+                        const len = Math.round(
+                          rebarBarStraightLenMm(bar) + hooks.left + hooks.right,
+                        );
+                        // Mỗi số hiệu (Ø+a+L+móc) một khoảng rải riêng trên minh họa
+                        if (z) {
+                          return `${z.mark}|${z.dia}|${z.spacing}|${z.direction}|L${len}|H${hooks.left}/${hooks.right}`;
+                        }
+                        return `${bar.dir}|10|150|L${len}|H${hooks.left}/${hooks.right}`;
                       };
                       const merged = buildMergedDistRanges(
                         project,

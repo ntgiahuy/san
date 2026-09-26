@@ -1566,20 +1566,46 @@ export function slabDistRangeForBar(
     return { lo: x0, hi: x1 };
   };
 
+  // Sàn thấp cắt: khoảng rải neo đúng bao ô thấp (không lan qua dải mất dầm).
+  const owned = barOwnedByCutLowSlab(project, bar);
+  if (owned) {
+    if (bar.dir === "X") {
+      const mx = (bar.x0 + bar.x1) / 2;
+      const yA = owned.y + inset;
+      const yB = owned.y + owned.h - inset;
+      if (!(yB - yA > 1)) return null;
+      return { xA: mx, yA, xB: mx, yB, lenMm: yB - yA };
+    }
+    const my = (bar.y0 + bar.y1) / 2;
+    const xA = owned.x + inset;
+    const xB = owned.x + owned.w - inset;
+    if (!(xB - xA > 1)) return null;
+    return { xA, yA: my, xB, yB: my, lenMm: xB - xA };
+  }
+
   if (bar.dir === "X") {
     const mx = (bar.x0 + bar.x1) / 2;
+    const bx0 = Math.min(bar.x0, bar.x1);
+    const bx1 = Math.max(bar.x0, bar.x1);
     let yLo = Infinity;
     let yHi = -Infinity;
-    for (let iy = 0; iy < axesY.length - 1; iy++) {
-      for (let ix = 0; ix < axesX.length - 1; ix++) {
-        const s = baySlabExtent(project, axesX, axesY, ix, iy);
-        if (bar.y >= s.y0 - 1 && bar.y <= s.y1 + 1) {
+    /** Ưu tiên ô giao đúng đoạn thanh; fallback (sàn xéo) chỉ theo hàng y. */
+    const accumulateX = (requireXOverlap: boolean): boolean => {
+      let hit = false;
+      for (let iy = 0; iy < axesY.length - 1; iy++) {
+        for (let ix = 0; ix < axesX.length - 1; ix++) {
+          const s = baySlabExtent(project, axesX, axesY, ix, iy);
+          if (bar.y < s.y0 - 1 || bar.y > s.y1 + 1) continue;
+          if (requireXOverlap && (bx1 < s.x0 - 1 || bx0 > s.x1 + 1)) continue;
           const e = expandContiguous(ix, iy, "Y");
           yLo = Math.min(yLo, e.lo);
           yHi = Math.max(yHi, e.hi);
+          hit = true;
         }
       }
-    }
+      return hit;
+    };
+    if (!accumulateX(true)) accumulateX(false);
     if (!(yHi > yLo)) return null;
     const yA = yLo + inset;
     const yB = yHi - inset;
@@ -1588,18 +1614,27 @@ export function slabDistRangeForBar(
   }
 
   const my = (bar.y0 + bar.y1) / 2;
+  const by0 = Math.min(bar.y0, bar.y1);
+  const by1 = Math.max(bar.y0, bar.y1);
   let xLo = Infinity;
   let xHi = -Infinity;
-  for (let iy = 0; iy < axesY.length - 1; iy++) {
-    for (let ix = 0; ix < axesX.length - 1; ix++) {
-      const s = baySlabExtent(project, axesX, axesY, ix, iy);
-      if (bar.x >= s.x0 - 1 && bar.x <= s.x1 + 1) {
+  /** Ưu tiên ô giao đúng đoạn thanh; fallback (sàn xéo) chỉ theo cột x. */
+  const accumulateY = (requireYOverlap: boolean): boolean => {
+    let hit = false;
+    for (let iy = 0; iy < axesY.length - 1; iy++) {
+      for (let ix = 0; ix < axesX.length - 1; ix++) {
+        const s = baySlabExtent(project, axesX, axesY, ix, iy);
+        if (bar.x < s.x0 - 1 || bar.x > s.x1 + 1) continue;
+        if (requireYOverlap && (by1 < s.y0 - 1 || by0 > s.y1 + 1)) continue;
         const e = expandContiguous(ix, iy, "X");
         xLo = Math.min(xLo, e.lo);
         xHi = Math.max(xHi, e.hi);
+        hit = true;
       }
     }
-  }
+    return hit;
+  };
+  if (!accumulateY(true)) accumulateY(false);
   if (!(xHi > xLo)) return null;
   const xA = xLo + inset;
   const xB = xHi - inset;
@@ -1754,7 +1789,9 @@ export function buildMergedDistRanges(
     if (!idx) continue;
     const markKey = markKeyOf(bar);
     if (!markKey) continue;
-    // Khoảng rải theo dải ô + Ø/móc — không tách theo L (biến thiên vẫn 1 khoảng rải).
+    // Khoảng rải theo dải ô + Ø/móc (+ markKey từ caller).
+    // Caller minh họa/PDF đưa L+móc vào markKey → mỗi số hiệu một khoảng rải;
+    // caller thống kê chỉ dùng mark vùng → vẫn gộp biến thiên L trong vùng.
     const hooks = hooksForRebarBar(project, bar, list);
     const z = zoneForRebarBar(project, bar, list);
     const dia = z ? Math.round(Number(z.dia) || 0) : 0;
@@ -1774,10 +1811,10 @@ export function buildMergedDistRanges(
     });
   }
 
-  // Nhóm theo phương + loại thép (dài/Ø/móc) + strip (cùng hàng/cột)
+  // Nhóm theo phương + markKey + loại thép (Ø/móc) + strip (cùng hàng/cột)
   const groups = new Map<string, DistRangePiece[]>();
   for (const p of pieces) {
-    const key = `${p.dir}|${p.identityKey}|${p.stripKey}`;
+    const key = `${p.dir}|${p.markKey}|${p.identityKey}|${p.stripKey}`;
     const arr = groups.get(key) ?? [];
     arr.push(p);
     groups.set(key, arr);
