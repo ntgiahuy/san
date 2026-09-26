@@ -220,7 +220,8 @@ function main() {
   }
 
   // Cây điển hình Y cột 1-2 chạm ô có thép → phải có khoảng rải giao thanh
-  const col0Typical = drawBars.filter((b) => {
+  type YBar = Extract<(typeof drawBars)[number], { dir: "Y" }>;
+  const col0Typical = drawBars.filter((b): b is YBar => {
     if (b.dir !== "Y") return false;
     const s = baySlabExtent(p, ax, ay, 0, 0);
     return b.x >= s.x0 - 1 && b.x <= s.x1 + 1;
