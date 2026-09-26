@@ -33,6 +33,7 @@ import {
   hookDrawMm,
   zoneForRebarBar,
   distRangeJunctionsOnBars,
+  ensureSectionCuts,
   type RebarBarSeg,
 } from "../grid";
 import type { GridAxis, PlanBeam, RebarLayer, RebarZone, SlabProject } from "../types";
@@ -1182,6 +1183,111 @@ function buildPdfScheduleRows(ctx: Ctx): Array<ScheduleRow & { stt: number }> {
 }
 
 
+/**
+ * Mặt cắt thép sàn schematic: dầm hai đầu + sàn + chấm thép dưới/trên.
+ * `cutDir` X → MẶT CẮT A-A (cắt tại X); Y → MẶT CẮT B-B (cắt tại Y).
+ */
+function drawRebarSectionCut(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  maxW: number,
+  cutDir: "X" | "Y",
+): number {
+  const { project, model } = ctx;
+  const sections = ensureSectionCuts(project);
+  const sec = sections.find((s) => s.direction === cutDir);
+  const label = cutDir === "X" ? "A-A" : "B-B";
+  const axisName =
+    cutDir === "X"
+      ? sortAxes(project.axesX ?? []).find((a) => a.id === sec?.axisId)?.name
+      : sortAxes(project.axesY ?? []).find((a) => a.id === sec?.axisId)?.name;
+  const at = Math.round(sec?.at ?? 0);
+  const title = `MẶT CẮT THÉP SÀN ${label}`;
+  const sub =
+    cutDir === "X"
+      ? `Cắt theo phương X · X=${at}${axisName ? ` (trục ${axisName})` : ""}`
+      : `Cắt theo phương Y · Y=${at}${axisName ? ` (trục ${axisName})` : ""}`;
+
+  textSimple(ctx, title, x + maxW / 2, y + 2, 8.5, true, "center");
+  textSimple(ctx, sub, x + maxW / 2, y + 14, 6.2, false, "center", GRAY);
+
+  const scale = 0.32;
+  const slabT = Math.max(model.thickness * scale, 16);
+  const beamSize =
+    cutDir === "X"
+      ? parseBeamSize(project.info.beamSizeY || project.info.beamSizeX || "220x500")
+      : parseBeamSize(project.info.beamSizeX || project.info.beamSizeY || "220x500");
+  const beamH = Math.max(28, beamSize.h * scale * 0.4);
+  const beamB = Math.max(18, beamSize.b * scale * 0.5);
+  const pad = 18;
+  const drawW = maxW - pad * 2;
+  const sy = y + 28;
+
+  // Sàn
+  rect(ctx, x + pad, sy, drawW, slabT, 0.85);
+  // Dầm hai đầu (dưới sàn)
+  rect(ctx, x + pad - beamB * 0.1, sy + slabT, beamB, beamH, 0.85);
+  rect(ctx, x + pad + drawW - beamB * 0.9, sy + slabT, beamB, beamH, 0.85);
+
+  // Chấm thép ⊥ mặt cắt: lớp dưới đặc, lớp trên rỗng
+  // Cắt X → thấy thanh Y; cắt Y → thấy thanh X
+  const zones = effectiveZones(project);
+  const perpDir: "X" | "Y" = cutDir === "X" ? "Y" : "X";
+  const hasBot = zones.some(
+    (z) => (z.layer === "bottom" || z.layer === "structural") && z.direction === perpDir,
+  );
+  const hasTop = zones.some((z) => z.layer === "top" && z.direction === perpDir);
+  // Thanh song song mặt cắt — nét ngang trong lớp
+  const hasBotLong = zones.some(
+    (z) => (z.layer === "bottom" || z.layer === "structural") && z.direction === cutDir,
+  );
+  const hasTopLong = zones.some((z) => z.layer === "top" && z.direction === cutDir);
+  const n = 7;
+  const x0 = x + pad + 14;
+  const x1 = x + pad + drawW - 14;
+  const yBot = sy + slabT * 0.3;
+  const yTop = sy + slabT * 0.7;
+  if (hasBotLong) line(ctx, x0, yBot, x1, yBot, 0.65, REBAR_RED);
+  if (hasTopLong) line(ctx, x0, yTop, x1, yTop, 0.65, REBAR_RED);
+  for (let i = 0; i < n; i++) {
+    const px = x0 + ((x1 - x0) * i) / Math.max(1, n - 1);
+    if (hasBot) {
+      ctx.page.drawCircle({ x: px, y: ty(yBot), size: 2.1, color: REBAR_RED });
+    }
+    if (hasTop) {
+      ctx.page.drawCircle({
+        x: px,
+        y: ty(yTop),
+        size: 2.1,
+        borderColor: REBAR_RED,
+        borderWidth: 0.75,
+      });
+    }
+  }
+
+  dimV(ctx, x + pad + drawW + 10, sy, sy + slabT, `${project.info.thickness}`, 6, "right");
+  textSimple(
+    ctx,
+    `Lớp BV ${project.info.cover}`,
+    x + maxW / 2,
+    sy + slabT + beamH + 12,
+    6.5,
+    false,
+    "center",
+  );
+  return sy + slabT + beamH + 26;
+}
+
+/** Hai mặt cắt A-A (X) và B-B (Y) cạnh nhau — nằm trên bảng thống kê. */
+function drawSectionCutsAboveSchedule(ctx: Ctx, x: number, y: number, maxW: number): number {
+  const gap = 16;
+  const half = (maxW - gap) / 2;
+  const bottomA = drawRebarSectionCut(ctx, x, y, half, "X");
+  const bottomB = drawRebarSectionCut(ctx, x + half + gap, y, half, "Y");
+  return Math.max(bottomA, bottomB);
+}
+
 function drawScheduleTable(ctx: Ctx, x: number, y: number) {
   const { project } = ctx;
   const rows = buildPdfScheduleRows(ctx);
@@ -1341,8 +1447,7 @@ export async function generateSlabPdf(
 
   /**
    * Một trang: Lớp dưới (trên) + Lớp trên (dưới) cùng cột trái;
-   * mỗi mặt bằng chỉ thép lớp đó phương X+Y.
-   * Phải: thống kê + tổng hợp.
+   * phải: Mặt cắt A-A / B-B → Thống kê → Tổng hợp.
    */
   const leftX = 36;
   const planW = 780;
@@ -1356,8 +1461,11 @@ export async function generateSlabPdf(
   const afterBottom = drawPlan(ctx, leftX, topY, planW, planH, zones, "bottom");
   drawPlan(ctx, leftX, afterBottom + gap, planW, planH, zones, "top");
 
-  const table = drawScheduleTable(ctx, 860, 62);
-  drawSummaryTable(ctx, 860, 62 + table.h + 16);
+  const rightX = 860;
+  const rightW = 780;
+  const afterSections = drawSectionCutsAboveSchedule(ctx, rightX, 62, rightW);
+  const table = drawScheduleTable(ctx, rightX, afterSections + 10);
+  drawSummaryTable(ctx, rightX, afterSections + 10 + table.h + 14);
 
   return pdf.save();
 }
