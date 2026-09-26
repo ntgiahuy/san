@@ -177,7 +177,8 @@ export interface Economy2Layer {
   structuralHook: number;
   distToCenter: number;
   textHeight: number;
-  hatAlongShort: boolean;
+  /** @deprecated Thép mũ luôn bố trí cả X và Y — giữ để đọc file cũ. */
+  hatAlongShort?: boolean;
 }
 
 export interface SectionCut {

@@ -209,15 +209,13 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
     ];
   }
 
-  // economy2
+  // economy2 — thép mũ bắt buộc cả phương X và Y (không chọn cạnh ngắn).
   const bot = parseSteelSpec(project.economy2.bottomSpec) ?? { dia: 10, spacing: 200 };
   const top = parseSteelSpec(project.economy2.topSpec) ?? { dia: 10, spacing: 150 };
   const st = parseSteelSpec(project.economy2.structuralSpec) ?? { dia: 6, spacing: 150 };
   const bh = project.economy2.bottomHook;
   const th = project.economy2.topHook;
   const sh = project.economy2.structuralHook;
-  const shortIsX = W <= H;
-  const hatDir: RebarDir = project.economy2.hatAlongShort ? (shortIsX ? "X" : "Y") : shortIsX ? "Y" : "X";
   /** KC đến tim 1/n — từ tim dầm ra mỗi phía L/n (L = nhịp tim−tim). */
   const n = Math.max(1, Math.round(Number(project.economy2.distToCenter) || 4));
 
@@ -251,10 +249,10 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
       note: "Lớp dưới Y",
     },
     {
-      id: "preset-economy2-ct",
+      id: "preset-economy2-ct-x",
       mark: rebarLayerMark("structural"),
       layer: "structural",
-      direction: hatDir === "X" ? "Y" : "X",
+      direction: "X",
       dia: st.dia,
       spacing: st.spacing,
       leftHook: sh,
@@ -262,67 +260,81 @@ function applyPresetZones(project: SlabProject): RebarZone[] {
       ...box,
       showSpacing: true,
       spacingSymbol: "a",
-      note: "Thép cấu tạo",
+      note: "Thép cấu tạo X",
+    },
+    {
+      id: "preset-economy2-ct-y",
+      mark: rebarLayerMark("structural"),
+      layer: "structural",
+      direction: "Y",
+      dia: st.dia,
+      spacing: st.spacing,
+      leftHook: sh,
+      rightHook: sh,
+      ...box,
+      showSpacing: true,
+      spacingSymbol: "a",
+      note: "Thép cấu tạo Y",
     },
   ];
 
-  // Thép mũ: không trải full nhịp như lớp dưới — mỗi tim dầm (trục đỡ)
-  // kéo dài L_trái/n + L_phải/n theo phương thanh.
-  const supportAxes =
-    hatDir === "X" ? sortAxes(project.axesX ?? []) : sortAxes(project.axesY ?? []);
-  for (let i = 0; i < supportAxes.length; i++) {
-    const ax = supportAxes[i]!;
-    const prev = supportAxes[i - 1];
-    const next = supportAxes[i + 1];
-    const leftExt = prev ? (ax.pos - prev.pos) / n : 0;
-    const rightExt = next ? (next.pos - ax.pos) / n : 0;
-    if (leftExt + rightExt < 50) continue;
+  // Thép mũ X + Y: mỗi tim dầm (trục đỡ) kéo dài L_trái/n + L_phải/n.
+  for (const hatDir of ["X", "Y"] as const) {
+    const supportAxes =
+      hatDir === "X" ? sortAxes(project.axesX ?? []) : sortAxes(project.axesY ?? []);
+    for (let i = 0; i < supportAxes.length; i++) {
+      const ax = supportAxes[i]!;
+      const prev = supportAxes[i - 1];
+      const next = supportAxes[i + 1];
+      const leftExt = prev ? (ax.pos - prev.pos) / n : 0;
+      const rightExt = next ? (next.pos - ax.pos) / n : 0;
+      if (leftExt + rightExt < 50) continue;
 
-    if (hatDir === "X") {
-      const x1 = Math.max(box.x1, ax.pos - leftExt);
-      const x2 = Math.min(box.x2, ax.pos + rightExt);
-      if (x2 - x1 < 50) continue;
-      zones.push({
-        id: `preset-economy2-hat-${i}`,
-        mark: rebarLayerMark("top"),
-        layer: "top",
-        direction: "X",
-        dia: top.dia,
-        spacing: top.spacing,
-        leftHook: th,
-        rightHook: th,
-        x1,
-        y1: box.y1,
-        x2,
-        y2: box.y2,
-        // Chiều dài mũ = đúng từ tim ± L/n (không trừ cover thêm).
-        cover: 0,
-        showSpacing: true,
-        spacingSymbol: "a",
-        note: "Thép mũ",
-      });
-    } else {
-      const y1 = Math.max(box.y1, ax.pos - leftExt);
-      const y2 = Math.min(box.y2, ax.pos + rightExt);
-      if (y2 - y1 < 50) continue;
-      zones.push({
-        id: `preset-economy2-hat-${i}`,
-        mark: rebarLayerMark("top"),
-        layer: "top",
-        direction: "Y",
-        dia: top.dia,
-        spacing: top.spacing,
-        leftHook: th,
-        rightHook: th,
-        x1: box.x1,
-        y1,
-        x2: box.x2,
-        y2,
-        cover: 0,
-        showSpacing: true,
-        spacingSymbol: "a",
-        note: "Thép mũ",
-      });
+      if (hatDir === "X") {
+        const x1 = Math.max(box.x1, ax.pos - leftExt);
+        const x2 = Math.min(box.x2, ax.pos + rightExt);
+        if (x2 - x1 < 50) continue;
+        zones.push({
+          id: `preset-economy2-hat-x-${i}`,
+          mark: rebarLayerMark("top"),
+          layer: "top",
+          direction: "X",
+          dia: top.dia,
+          spacing: top.spacing,
+          leftHook: th,
+          rightHook: th,
+          x1,
+          y1: box.y1,
+          x2,
+          y2: box.y2,
+          cover: 0,
+          showSpacing: true,
+          spacingSymbol: "a",
+          note: "Thép mũ X",
+        });
+      } else {
+        const y1 = Math.max(box.y1, ax.pos - leftExt);
+        const y2 = Math.min(box.y2, ax.pos + rightExt);
+        if (y2 - y1 < 50) continue;
+        zones.push({
+          id: `preset-economy2-hat-y-${i}`,
+          mark: rebarLayerMark("top"),
+          layer: "top",
+          direction: "Y",
+          dia: top.dia,
+          spacing: top.spacing,
+          leftHook: th,
+          rightHook: th,
+          x1: box.x1,
+          y1,
+          x2: box.x2,
+          y2,
+          cover: 0,
+          showSpacing: true,
+          spacingSymbol: "a",
+          note: "Thép mũ Y",
+        });
+      }
     }
   }
   return zones;

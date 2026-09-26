@@ -55,7 +55,6 @@ export function defaultEconomy2(): Economy2Layer {
     structuralHook: 80,
     distToCenter: 4,
     textHeight: 150,
-    hatAlongShort: true,
   };
 }
 

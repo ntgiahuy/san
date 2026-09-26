@@ -1230,11 +1230,6 @@ export function SlabApp() {
     setStatus("Đã áp dụng bố trí 2 lớp đơn giản.");
   }
 
-  function applyEconomy2() {
-    setPreset("economy2");
-    setStatus("Đã áp dụng bố trí 2 lớp tiết kiệm.");
-  }
-
   function assignAllBeams() {
     persist(applyAxesToProject(project));
     setStatus("Đã gán dầm theo trục lưới.");
@@ -1426,7 +1421,13 @@ export function SlabApp() {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              setTab(t.id);
+              // Tab tiết kiệm: tự áp dụng preset (thép mũ X+Y), không cần nút riêng.
+              if (t.id === "economy2" && project.layoutPreset !== "economy2") {
+                setPreset("economy2");
+              }
+            }}
             className={`shrink-0 rounded-t px-2.5 py-1.5 text-[12px] ${
               tab === t.id
                 ? "bg-zinc-800 font-semibold text-sky-300"
@@ -2513,18 +2514,6 @@ export function SlabApp() {
                     onChange={(e) => persist({ ...project, economy2: { ...project.economy2, distToCenter: Number(e.target.value) || 1 } })}
                   />
                 </Field>
-              </div>
-              <label className="mt-2 flex items-center gap-2 text-xs text-zinc-300">
-                <Checkbox
-                  checked={project.economy2.hatAlongShort}
-                  onCheckedChange={(v) => persist({ ...project, economy2: { ...project.economy2, hatAlongShort: Boolean(v) } })}
-                />
-                Thép mũ theo phương cạnh ngắn
-              </label>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button size="sm" className="text-amber-300" variant="secondary" onClick={applyEconomy2}>
-                  Áp dụng bố trí tiết kiệm
-                </Button>
               </div>
             </Panel>
           )}
