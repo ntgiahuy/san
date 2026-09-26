@@ -939,7 +939,7 @@ function drawPlan(
     }
   }
   const tick = 70;
-  for (const m of stripRebarPressMarks(project, axesX, axesY)) {
+  for (const m of stripRebarPressMarks(project, axesX, axesY, rebarZones)) {
     if (m.dir === "X") {
       line(ctx, toX(m.x), toY(m.y - tick), toX(m.x), toY(m.y + tick), 0.55, pressAmber);
       line(ctx, toX(m.x - tick * 0.35), toY(m.y + tick * 0.55), toX(m.x), toY(m.y + tick), 0.55, pressAmber);

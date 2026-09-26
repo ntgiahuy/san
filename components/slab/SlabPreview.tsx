@@ -888,7 +888,7 @@ export const SlabPreview = memo(function SlabPreview({
               /** 2 lớp cùng phương → 2 cây điển hình/phương (lệch dày sàn − BV). */
               const drawBars = typicalLayeredRebarBars(project, bars, zones);
               const stroke = "#ef4444";
-              const pressMarks = stripRebarPressMarks(project, axesX, axesY);
+              const pressMarks = stripRebarPressMarks(project, axesX, axesY, zones);
               const tick = 70;
               return (
                 <>
