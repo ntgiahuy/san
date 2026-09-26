@@ -2127,7 +2127,15 @@ export function groupTypicalRebarByBayStrip(
         if (dir === "Y" && a.dir === "Y" && b.dir === "Y") return a.x - b.x;
         return 0;
       });
-      const mid = stripBars[Math.floor((stripBars.length - 1) / 2)]!;
+      // Ưu tiên thanh sàn thường làm điển hình dải — thép sàn thấp cắt vẽ riêng.
+      // Bỏ mẩu vụn còn lại sau khi cắt ô (quá ngắn) để không làm điển hình giả.
+      const normalBars = stripBars.filter((b) => {
+        if (barOwnedByCutLowSlab(project, b)) return false;
+        const len = b.dir === "X" ? b.x1 - b.x0 : b.y1 - b.y0;
+        return len >= 300;
+      });
+      if (!normalBars.length) continue;
+      const mid = normalBars[Math.floor((normalBars.length - 1) / 2)]!;
       groups.push({ bars: stripBars, typical: mid, stripIndex: strip });
     }
   }
@@ -2304,6 +2312,72 @@ export function clipSpanToCoverEnvelope(
   return { lo: outLo, hi: outHi };
 }
 
+/** Thanh nằm trong ô sàn thấp chế độ cắt (thép riêng của ô, không phải sàn thường). */
+export function barOwnedByCutLowSlab(
+  project: SlabProject,
+  bar: RebarBarSeg,
+): NonNullable<SlabProject["lowSlabs"]>[number] | null {
+  for (const ls of project.lowSlabs ?? []) {
+    if ((ls.rebarMode ?? "press") !== "cut") continue;
+    const x0 = ls.x;
+    const y0 = ls.y;
+    const x1 = ls.x + ls.w;
+    const y1 = ls.y + ls.h;
+    if (bar.dir === "X") {
+      const mid = (bar.x0 + bar.x1) / 2;
+      if (mid >= x0 - 1 && mid <= x1 + 1 && bar.y >= y0 - 1 && bar.y <= y1 + 1) return ls;
+    } else {
+      const mid = (bar.y0 + bar.y1) / 2;
+      if (bar.x >= x0 - 1 && bar.x <= x1 + 1 && mid >= y0 - 1 && mid <= y1 + 1) return ls;
+    }
+  }
+  return null;
+}
+
+/**
+ * Neo thép sàn thấp cắt theo dầm bao quanh đúng ô đó (không kéo full biên sàn).
+ */
+function reanchorCutLowBarToBay(
+  project: SlabProject,
+  bar: RebarBarSeg,
+  ls: NonNullable<SlabProject["lowSlabs"]>[number],
+): RebarBarSeg {
+  const cover = slabCoverMm(project);
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+  let ix = -1;
+  let iy = -1;
+  for (let j = 0; j < axesY.length - 1 && iy < 0; j++) {
+    for (let i = 0; i < axesX.length - 1; i++) {
+      const slab = baySlabExtent(project, axesX, axesY, i, j);
+      if (rectNearlyEquals(ls, slab.x0, slab.y0, slab.x1, slab.y1)) {
+        ix = i;
+        iy = j;
+        break;
+      }
+    }
+  }
+  if (ix < 0 || iy < 0) return bar;
+  const ax0 = axesX[ix]!;
+  const ax1 = axesX[ix + 1]!;
+  const ay0 = axesY[iy]!;
+  const ay1 = axesY[iy + 1]!;
+  if (bar.dir === "X") {
+    const left = beamOuterFacesAtAlong(project, "Y", ax0, bar.y);
+    const right = beamOuterFacesAtAlong(project, "Y", ax1, bar.y);
+    const x0 = left.lo + cover;
+    const x1 = right.hi - cover;
+    if (!(x1 - x0 > 1)) return bar;
+    return { ...bar, x0, x1 };
+  }
+  const bottom = beamOuterFacesAtAlong(project, "X", ay0, bar.x);
+  const top = beamOuterFacesAtAlong(project, "X", ay1, bar.x);
+  const y0 = bottom.lo + cover;
+  const y1 = top.hi - cover;
+  if (!(y1 - y0 > 1)) return bar;
+  return { ...bar, y0, y1 };
+}
+
 /**
  * Sau khi neo full biên ± BV: cắt lại ô thủng / sàn thấp cắt + khe dầm độc lập,
  * rồi giữ đoạn chứa trung điểm thanh gốc (không cầu nối xuyên ô trống).
@@ -2368,8 +2442,12 @@ function pickSpanAfterObstacles(
  * Đặt lại đầu thanh vào da ngoài ± lớp BV tại đúng trạm (sau khi lệch ⊥ 2 lớp),
  * rồi cắt theo bao 4 cạnh — tránh móc rơi ngoài dầm xéo / hình thang.
  * Giữ cắt ô thủng / sàn thấp cắt (không kéo thép xuyên ô trống).
+ * Thép sàn thấp cắt: neo theo dầm bao quanh đúng ô đó.
  */
 export function reanchorBarEndsToCover(project: SlabProject, bar: RebarBarSeg): RebarBarSeg {
+  const owned = barOwnedByCutLowSlab(project, bar);
+  if (owned) return reanchorCutLowBarToBay(project, bar, owned);
+
   const cover = slabCoverMm(project);
   const axesX = sortAxes(project.axesX ?? []);
   const axesY = sortAxes(project.axesY ?? []);
@@ -2487,26 +2565,34 @@ export function typicalLayeredRebarBars(
   const layerOf = (dir: "X" | "Y", layer: "bottom" | "top") =>
     list.some((z) => z.direction === dir && z.layer === layer);
 
-  const out: RebarBarSeg[] = [];
-  for (const g of groups) {
-    const dir = g.typical.dir;
+  const pushTypical = (mid: RebarBarSeg) => {
+    const dir = mid.dir;
     const hasBot = layerOf(dir, "bottom");
     const hasTop = layerOf(dir, "top");
     /** Có zone structural-only vẫn hiện 1 thanh điển hình. */
-    if (!hasBot && !hasTop && !list.some((z) => z.direction === dir)) continue;
+    if (!hasBot && !hasTop && !list.some((z) => z.direction === dir)) return;
     if (hasBot && hasTop) {
       // Căn quanh cây giữa dải: dưới −half, trên +half (tách rõ 2 lớp)
       // Neo lại đầu ± BV tại trạm mới — tránh móc rơi ngoài da dầm khi dầm xéo.
-      const mid = g.typical;
       out.push({ ...offsetBarPerpReanchored(project, mid, -half), layer: "bottom" });
       const topBase = offsetBarPerpReanchored(project, mid, half);
       // Thép mũ: clip theo vùng — không neo lại mép biên (đầu nằm trên dầm trong).
       out.push(...clipBarToTopZones(topBase, list));
     } else if (hasTop && !hasBot) {
-      out.push(...clipBarToTopZones(g.typical, list));
+      out.push(...clipBarToTopZones(mid, list));
     } else {
-      out.push({ ...reanchorBarEndsToCover(project, g.typical), layer: "bottom" });
+      out.push({ ...reanchorBarEndsToCover(project, mid), layer: "bottom" });
     }
+  };
+
+  const out: RebarBarSeg[] = [];
+  for (const g of groups) pushTypical(g.typical);
+
+  // Mỗi ô sàn thấp cắt: luôn có cây điển hình X+Y riêng (không gộp mất vào dải sàn thường)
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+  for (const bar of cutLowSlabRebarSegments(project, axesX, axesY)) {
+    pushTypical(bar);
   }
 
   const rank = (b: RebarBarSeg): number => {
