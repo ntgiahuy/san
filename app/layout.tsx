@@ -6,7 +6,7 @@ import { MembershipScript } from "./membership-script";
 export const metadata: Metadata = {
   title: "Shop drawing thép sàn | GiaHuy.Net",
   description:
-    "Nhập số liệu sàn BTCT và xuất shop thép sàn + bảng thống kê cốt thép ra PDF A2",
+    "Nhập số liệu sàn BTCT và xuất shop thép sàn + bảng thống kê cốt thép ra PDF A1",
   icons: {
     icon: [
       { url: withBasePath("/favicon-96x96.png"), sizes: "96x96", type: "image/png" },

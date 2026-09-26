@@ -1,6 +1,6 @@
 # Shop drawing thép sàn
 
-Công cụ nhập số liệu sàn bê tông cốt thép (theo UI shop thép sàn) và **xuất bản vẽ PDF A2** gồm:
+Công cụ nhập số liệu sàn bê tông cốt thép (theo UI shop thép sàn) và **xuất bản vẽ PDF A1** gồm:
 
 - Mặt bằng dầm + vùng thép lớp dưới / trên / cấu tạo
 - Shop nổ thanh thép (móc 2 đầu)
@@ -37,6 +37,6 @@ npm run build
 2. **Vẽ thép sàn** — số hiệu, Ø, khoảng a, móc trái/phải, phương X/Y.
 3. **2 lớp tiết kiệm / đơn giản** — nhập dạng `10a150`, áp dụng preset tự sinh vùng thép.
 4. **Mặt cắt / 3D** — tạo mặt cắt trên PDF; xem mô hình 3D đơn giản.
-5. **Xuất PDF** — khổ A2 ngang.
+5. **Xuất PDF** — khổ A1 ngang.
 
 Dữ liệu lưu localStorage; **Save As** / **Open** dùng file `[Giahuy.net]-shop_san.json`.
