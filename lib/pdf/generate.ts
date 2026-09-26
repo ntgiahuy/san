@@ -36,7 +36,6 @@ import {
   type RebarBarSeg,
 } from "../grid";
 import type { GridAxis, PlanBeam, RebarLayer, RebarZone, SlabProject } from "../types";
-import { buildBeamFrameScene, projectSceneToSvg } from "../view3d";
 
 const PAGE_W = 1684;
 const PAGE_H = 1191;
@@ -817,6 +816,7 @@ function planScale(project: SlabProject, maxW: number, maxH: number) {
   return Math.min(sx, sy);
 }
 
+/** Bản vẽ mặt bằng theo lớp: bottom = Lớp dưới, top = Lớp trên. */
 function drawPlan(
   ctx: Ctx,
   ox: number,
@@ -824,8 +824,15 @@ function drawPlan(
   maxW: number,
   maxH: number,
   zones: RebarZone[],
+  layer: "bottom" | "top" = "bottom",
 ) {
   const { project } = ctx;
+  const planTitle =
+    layer === "top" ? "MẶT BẰNG CỐT THÉP SÀN LỚP TRÊN" : "MẶT BẰNG CỐT THÉP SÀN LỚP DƯỚI";
+  /** Zone thuộc lớp đang vẽ (structural gộp vào lớp dưới). */
+  const layerZones = zones.filter((z) =>
+    layer === "top" ? z.layer === "top" : z.layer === "bottom" || z.layer === "structural",
+  );
   const s = planScale(project, maxW, maxH);
   const pw = project.planWidth * s;
   const ph = project.planHeight * s;
@@ -915,12 +922,13 @@ function drawPlan(
     textSimple(ctx, o.name || "Ô", toX((ox0 + ox1) / 2), toY((oy0 + oy1) / 2), 6.5, true, "center");
   }
 
-  // —— Thép sàn (chỉ nét đỏ) + vòng STT + Øa ——
+  // —— Thép sàn lớp đang vẽ (chỉ nét đỏ) + vòng STT + Øa ——
   const pressAmber = rgb(0.9, 0.55, 0.1);
   const bars = stripRebarBarSegments(project, axesX, axesY);
   const rebarZones = effectiveZones(project);
-  /** 2 lớp cùng phương → 2 cây điển hình/phương (lệch dày sàn − BV). */
-  const drawBars = typicalLayeredRebarBars(project, bars, rebarZones);
+  /** STT thống nhất cả 2 lớp; chỉ vẽ cây điển hình của lớp này. */
+  const allDrawBars = typicalLayeredRebarBars(project, bars, rebarZones);
+  const drawBars = allDrawBars.filter((b) => (b.layer ?? "bottom") === layer);
   for (const bar of drawBars) {
     const { left: leftHook, right: rightHook } = hooksForRebarBar(project, bar, rebarZones);
     if (bar.dir === "X") {
@@ -939,7 +947,9 @@ function drawPlan(
     }
   }
   const tick = 70;
-  for (const m of stripRebarPressMarks(project, axesX, axesY, rebarZones)) {
+  // Ký hiệu nhấn chỉ trên thanh lớp đang vẽ
+  const pressMarks = stripRebarPressMarks(project, axesX, axesY, layerZones);
+  for (const m of pressMarks) {
     if (m.dir === "X") {
       line(ctx, toX(m.x), toY(m.y - tick), toX(m.x), toY(m.y + tick), 0.55, pressAmber);
       line(ctx, toX(m.x - tick * 0.35), toY(m.y + tick * 0.55), toX(m.x), toY(m.y + tick), 0.55, pressAmber);
@@ -952,9 +962,9 @@ function drawPlan(
     textSimple(ctx, `↓${m.drop}`, toX(m.x) + 4, toY(m.y) - 4, 5.5, false, "left");
   }
 
-  // Số hiệu trên từng cây điển hình
+  // Số hiệu trên từng cây điển hình (STT chung 2 lớp)
   const CALL_GAP = 8;
-  const sttRegistry = unifiedSttRegistry(project, ctx.model.schedule, drawBars, rebarZones);
+  const sttRegistry = unifiedSttRegistry(project, ctx.model.schedule, allDrawBars, rebarZones);
   for (const bar of drawBars) {
     const info = sttInfoForPlanBar(project, ctx.model.schedule, sttRegistry, rebarZones, bar);
     const label = `Ø${info.dia}a${info.spacing}`;
@@ -979,13 +989,14 @@ function drawPlan(
     }
   }
 
-  // —— Khoảng rải: ô kề nhau cùng số hiệu → 1 đường từ đầu dải đến cuối dải ——
-  const showDist = project.info.showDistRange !== false && zones.some((z) => z.showSpacing);
+  // —— Khoảng rải lớp đang vẽ ——
+  const showDist =
+    project.info.showDistRange !== false && layerZones.some((z) => z.showSpacing);
   if (showDist) {
     const markKeyOf = (bar: (typeof bars)[number]) => {
       const mx = bar.dir === "X" ? (bar.x0 + bar.x1) / 2 : bar.x;
       const my = bar.dir === "X" ? bar.y : (bar.y0 + bar.y1) / 2;
-      const hits = zones.filter((z) => {
+      const hits = layerZones.filter((z) => {
         if (z.direction !== bar.dir) return false;
         const zx0 = Math.min(z.x1, z.x2);
         const zx1 = Math.max(z.x1, z.x2);
@@ -993,15 +1004,14 @@ function drawPlan(
         const zy1 = Math.max(z.y1, z.y2);
         return mx >= zx0 - 1 && mx <= zx1 + 1 && my >= zy0 - 1 && my <= zy1 + 1;
       });
-      const z = hits.find((h) => h.layer === "bottom") ?? hits[0];
+      const z = hits[0];
       const hooks = hooksForRebarBar(project, bar, rebarZones);
       const len = Math.round(rebarBarStraightLenMm(bar) + hooks.left + hooks.right);
       // Mỗi số hiệu (Ø+a+L+móc) một khoảng rải riêng trên PDF
       if (z) {
         return `${z.mark}|${z.dia}|${z.spacing}|${z.direction}|L${len}|H${hooks.left}/${hooks.right}`;
       }
-      const spec = steelSpecForBar(zones, ctx.model.schedule, bar);
-      return `${bar.dir}|${spec.dia}|${spec.spacing}|L${len}|H${hooks.left}/${hooks.right}`;
+      return "";
     };
     const merged = buildMergedDistRanges(
       project,
@@ -1010,7 +1020,7 @@ function drawPlan(
       bars,
       markKeyOf,
       undefined,
-      rebarZones,
+      layerZones,
     );
     for (const seg of merged) {
       const pxA = toX(seg.xA);
@@ -1089,7 +1099,7 @@ function drawPlan(
 
   // Tiêu đề + tỉ lệ: dưới bản vẽ, hở khỏi số dim ngang
   const titleY = dimBottomY + 28;
-  textSimple(ctx, "MẶT BẰNG CỐT THÉP SÀN", ox + maxW / 2, titleY, 12, true, "center");
+  textSimple(ctx, planTitle, ox + maxW / 2, titleY, 11, true, "center");
   textSimple(ctx, `TL: 1/${project.info.drawingScale}`, ox + maxW / 2, titleY + 14, 8, false, "center");
 
   return titleY + 24;
@@ -1171,111 +1181,6 @@ function buildPdfScheduleRows(ctx: Ctx): Array<ScheduleRow & { stt: number }> {
   );
 }
 
-function drawSection(ctx: Ctx, x: number, y: number) {
-  const { project, model } = ctx;
-  const scale = 0.35;
-  const slabT = Math.max(model.thickness * scale, 18);
-  const beam = parseBeamSize(project.info.beamSizeX);
-  const beamH = beam.h * scale * 0.45;
-  const beamB = beam.b * scale * 0.55;
-  const W = 220;
-  const secName = project.sections[0]?.name ?? "1";
-  const secX = project.sections.find((s) => s.direction === "X");
-  const secY = project.sections.find((s) => s.direction === "Y");
-  const where =
-    secX && secY
-      ? ` (X=${Math.round(secX.at)}, Y=${Math.round(secY.at)})`
-      : "";
-  textSimple(ctx, `MẶT CẮT ${secName}-1${where}`, x + W / 2, y, 9, true, "center");
-  const sy = y + 16;
-  // slab
-  rect(ctx, x + 20, sy, W - 40, slabT, 0.9);
-  // beams under ends
-  rect(ctx, x + 20 - beamB * 0.15, sy + slabT, beamB, beamH, 0.9);
-  rect(ctx, x + W - 20 - beamB * 0.85, sy + slabT, beamB, beamH, 0.9);
-  // rebar dots
-  const n = 6;
-  for (let i = 0; i < n; i++) {
-    const px = x + 28 + ((W - 56) * i) / (n - 1);
-    ctx.page.drawCircle({
-      x: px,
-      y: ty(sy + slabT * 0.35),
-      size: 2.2,
-      color: BLACK,
-    });
-    ctx.page.drawCircle({
-      x: px,
-      y: ty(sy + slabT * 0.72),
-      size: 2.2,
-      borderColor: BLACK,
-      borderWidth: 0.6,
-    });
-  }
-  dimV(ctx, x + W - 8, sy, sy + slabT, `${project.info.thickness}`, 6.5, "right");
-  textSimple(ctx, `Lớp BV ${project.info.cover}`, x + W / 2, sy + slabT + beamH + 14, 7, false, "center");
-  return sy + slabT + beamH + 28;
-}
-
-/** Phối cảnh dầm sàn isometric (hidden-line) — giống bản vẽ shop. */
-function drawPhốiCảnh(ctx: Ctx, x: number, y: number, maxW: number, maxH: number) {
-  const scene = buildBeamFrameScene(ctx.project);
-  const view = projectSceneToSvg(scene, { width: maxW, height: maxH - 28, pad: 16 });
-  const ox = x;
-  const oy = y + 4;
-
-  for (const poly of view.polygons) {
-    const pts = poly.points.split(" ").map((pair) => {
-      const [px, py] = pair.split(",").map(Number);
-      return { x: ox + px, y: oy + py };
-    });
-    if (pts.length < 3) continue;
-    const path =
-      pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${ty(p.y)}`).join(" ") + " Z";
-    // Chỉ tô trắng — nét cạnh vẽ riêng (liền / đứt)
-    ctx.page.drawSvgPath(path, {
-      color: rgb(1, 1, 1),
-      borderWidth: 0,
-    });
-    if (poly.kind === "hatch") {
-      for (let i = 0; i < pts.length; i++) {
-        const a = pts[i];
-        const b = pts[(i + 1) % pts.length];
-        for (let t = 0.2; t < 0.9; t += 0.25) {
-          const px = a.x + (b.x - a.x) * t;
-          const py = a.y + (b.y - a.y) * t;
-          ctx.page.drawCircle({ x: px, y: ty(py), size: 0.6, color: GRAY });
-        }
-      }
-    }
-  }
-
-  for (const e of view.edges) {
-    if (e.style === "dashed") {
-      line(ctx, ox + e.x1, oy + e.y1, ox + e.x2, oy + e.y2, 0.45, GRAY, [3.2, 2]);
-    } else {
-      line(ctx, ox + e.x1, oy + e.y1, ox + e.x2, oy + e.y2, 0.95, BLACK);
-    }
-  }
-
-  for (const ln of view.lines) {
-    line(ctx, ox + ln.x1, oy + ln.y1, ox + ln.x2, oy + ln.y2, 0.95, BLACK);
-  }
-
-  for (const m of view.marks) {
-    const mx = ox + m.x;
-    const my = oy + m.y;
-    // Tam giác cao độ
-    const path = `M ${mx - 5} ${ty(my)} L ${mx + 5} ${ty(my)} L ${mx} ${ty(my - 8)} Z`;
-    ctx.page.drawSvgPath(path, { color: BLACK });
-    line(ctx, mx, my, mx, my + 10, 0.6);
-    textSimple(ctx, m.elevText, mx + 8, my - 2, 7, true, "left");
-    textSimple(ctx, m.hsText, mx + 8, my + 10, 6.5, false, "left");
-  }
-
-  textSimple(ctx, view.title, x + maxW / 2, y + maxH - 14, 9, true, "center");
-  textSimple(ctx, view.subtitle, x + maxW / 2, y + maxH - 2, 7, false, "center");
-  return y + maxH;
-}
 
 function drawScheduleTable(ctx: Ctx, x: number, y: number) {
   const { project } = ctx;
@@ -1422,41 +1327,39 @@ export async function generateSlabPdf(
   });
 
   const title = `${project.info.name} (SL=${project.info.quantity}; dày=${project.info.thickness}mm)`;
-  textSimple(ctx, "1/1", 28, 34, 8, false, "left");
-  textSimple(ctx, title, PAGE_W - 36, 34, 11, true, "right");
-  textSimple(
-    ctx,
-    `Bê tông ${project.info.concreteGrade} · Thép ${project.info.steelGrade} · Lớp BV ${project.info.cover}mm`,
-    PAGE_W - 36,
-    48,
-    7.5,
-    false,
-    "right",
-  );
+  const drawPageChrome = (pageLabel: string) => {
+    textSimple(ctx, pageLabel, 28, 34, 8, false, "left");
+    textSimple(ctx, title, PAGE_W - 36, 34, 11, true, "right");
+    textSimple(
+      ctx,
+      `Bê tông ${project.info.concreteGrade} · Thép ${project.info.steelGrade} · Lớp BV ${project.info.cover}mm`,
+      PAGE_W - 36,
+      48,
+      7.5,
+      false,
+      "right",
+    );
+  };
 
-  const planBottom = drawPlan(ctx, 40, 78, 780, 400, zones);
-  const phoiBottom = drawPhốiCảnh(ctx, 860, 72, 780, 400);
-  drawSection(ctx, 860, phoiBottom + 8);
+  // Trang 1: Mặt bằng lớp dưới (trái) · Thống kê + Tổng hợp (phải — chỗ phối cảnh cũ)
+  drawPageChrome("1/2");
+  drawPlan(ctx, 40, 78, 780, 400, zones, "bottom");
+  const table = drawScheduleTable(ctx, 860, 72);
+  drawSummaryTable(ctx, 860, 72 + table.h + 20);
 
-  const y = Math.max(planBottom, phoiBottom) + 8;
-
-  const estTableH = 56 + Math.max(model.schedule.length, 1) * 18 + 48;
-  let tableY = y + 8;
-  if (tableY + estTableH > PAGE_H - 28) {
-    const page2 = pdf.addPage([PAGE_W, PAGE_H]);
-    page2.drawRectangle({
-      x: 16,
-      y: 16,
-      width: PAGE_W - 32,
-      height: PAGE_H - 32,
-      borderColor: BLACK,
-      borderWidth: 1.05,
-    });
-    ctx.page = page2;
-    tableY = 36;
-  }
-  const table = drawScheduleTable(ctx, 36, tableY);
-  drawSummaryTable(ctx, 36 + table.w + 28, tableY);
+  // Trang 2: Mặt bằng lớp trên
+  const page2 = pdf.addPage([PAGE_W, PAGE_H]);
+  page2.drawRectangle({
+    x: 16,
+    y: 16,
+    width: PAGE_W - 32,
+    height: PAGE_H - 32,
+    borderColor: BLACK,
+    borderWidth: 1.05,
+  });
+  ctx.page = page2;
+  drawPageChrome("2/2");
+  drawPlan(ctx, 40, 78, 780, 400, zones, "top");
 
   return pdf.save();
 }
