@@ -7,6 +7,7 @@ import type {
 import { rebarLayerMark } from "./types";
 import {
   ensureAxes,
+  ensureSectionCuts,
   groupTypicalRebarByBayStrip,
   hooksForRebarBar,
   rebarBarStraightLenMm,
@@ -690,7 +691,8 @@ export function normalizeProject(raw: SlabProject): SlabProject {
     axesX,
     axesY,
   };
-  return ensureAxes(merged);
+  const withAxes = ensureAxes(merged);
+  return { ...withAxes, sections: ensureSectionCuts(withAxes) };
 }
 
 export { STOCK_M };

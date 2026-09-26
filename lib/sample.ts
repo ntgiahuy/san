@@ -8,7 +8,7 @@ import type {
   SlabProject,
 } from "./types";
 import { rebarLayerMark } from "./types";
-import { applyAxesToProject, defaultAxesX, defaultAxesY } from "./grid";
+import { applyAxesToProject, defaultAxesX, defaultAxesY, ensureSectionCuts } from "./grid";
 import { uid } from "./utils";
 
 export function defaultInfo(): SlabInfo {
@@ -140,15 +140,27 @@ function sampleZones(): RebarZone[] {
 }
 
 function sampleSections(): SectionCut[] {
+  // Sẽ được chuẩn hóa lại trong createSampleS1 (trục + offset).
   return [
     {
       id: uid("sec"),
       name: "1",
       textHeight: 150,
       direction: "X",
+      at: 3000,
+      from: 0,
+      to: 4500,
+      offsetMm: 0,
+    },
+    {
+      id: uid("sec"),
+      name: "1",
+      textHeight: 150,
+      direction: "Y",
       at: 2250,
       from: 0,
       to: 6000,
+      offsetMm: 0,
     },
   ];
 }
@@ -170,7 +182,7 @@ export function createSampleS1(): SlabProject {
       size: b.size,
       offset: b.offset,
     }));
-  return applyAxesToProject({
+  const base = applyAxesToProject({
     info: defaultInfo(),
     planWidth: 6000,
     planHeight: 4500,
@@ -187,6 +199,7 @@ export function createSampleS1(): SlabProject {
     layoutPreset: "simple2",
     show3d: false,
   });
+  return { ...base, sections: ensureSectionCuts(base) };
 }
 
 export function createEmptyProject(): SlabProject {

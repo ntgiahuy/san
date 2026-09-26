@@ -5,6 +5,7 @@ import type {
   PlanBeam,
   RebarLayer,
   RebarZone,
+  SectionCut,
   SlabInfo,
   SlabProject,
 } from "./types";
@@ -2499,6 +2500,62 @@ export function nextAxisNameY(axes: GridAxis[]): string {
 
 export function sortAxes(axes: GridAxis[]): GridAxis[] {
   return [...axes].sort((a, b) => a.pos - b.pos);
+}
+
+/** Vị trí cắt tuyệt đối (mm) = pos(trục) + offset từ trục trở ra. */
+export function sectionCutAtMm(
+  project: SlabProject,
+  section: Pick<SectionCut, "direction" | "at" | "axisId" | "offsetMm">,
+): number {
+  const axes = sortAxes(
+    section.direction === "X" ? project.axesX ?? [] : project.axesY ?? [],
+  );
+  const ax =
+    (section.axisId ? axes.find((a) => a.id === section.axisId) : undefined) ??
+    axes[Math.floor((axes.length - 1) / 2)] ??
+    axes[0];
+  if (!ax) return Math.round(Number(section.at) || 0);
+  return Math.round(ax.pos + (Number(section.offsetMm) || 0));
+}
+
+/**
+ * Đảm bảo có mặt cắt theo phương X và Y; gắn trục + offset → `at`.
+ * Giữ tên mặt cắt chung từ phần tử đầu (hoặc "1").
+ */
+export function ensureSectionCuts(project: SlabProject): SectionCut[] {
+  const name = project.sections?.[0]?.name?.trim() || "1";
+  const textHeight = project.sections?.[0]?.textHeight || 150;
+  const xs = sortAxes(project.axesX ?? []);
+  const ys = sortAxes(project.axesY ?? []);
+  const midX = xs[Math.floor((xs.length - 1) / 2)] ?? xs[0];
+  const midY = ys[Math.floor((ys.length - 1) / 2)] ?? ys[0];
+  const W = project.planWidth || xs[xs.length - 1]?.pos || 6000;
+  const H = project.planHeight || ys[ys.length - 1]?.pos || 4500;
+
+  const pick = (dir: "X" | "Y"): SectionCut => {
+    const prev = (project.sections ?? []).find((s) => s.direction === dir);
+    const axes = dir === "X" ? xs : ys;
+    const fallback = dir === "X" ? midX : midY;
+    const ax =
+      (prev?.axisId ? axes.find((a) => a.id === prev.axisId) : undefined) ??
+      fallback ??
+      axes[0];
+    const offsetMm = Math.round(Number(prev?.offsetMm) || 0);
+    const at = ax ? Math.round(ax.pos + offsetMm) : Math.round(Number(prev?.at) || 0);
+    return {
+      id: prev?.id ?? uid("sec"),
+      name,
+      textHeight: prev?.textHeight || textHeight,
+      direction: dir,
+      axisId: ax?.id,
+      offsetMm,
+      at,
+      from: 0,
+      to: dir === "X" ? H : W,
+    };
+  };
+
+  return [pick("X"), pick("Y")];
 }
 
 export function defaultAxesX(width = 6000): GridAxis[] {

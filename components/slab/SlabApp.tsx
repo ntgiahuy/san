@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, Panel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { SlabPreview } from "@/components/slab/SlabPreview";
 import {
   computeModel,
@@ -38,8 +39,10 @@ import {
   clampPlanBeamNamesToCatalog,
   equalizeAxisSpans,
   ensureBeamsSplitBays,
+  ensureSectionCuts,
   findBeamTypeByName,
   isBeamSegOmitted,
+  sectionCutAtMm,
   normalizeBeamTypeName,
   patchBeam,
   patchBeamOnAxis,
@@ -280,7 +283,11 @@ export function SlabApp() {
       zones.push({ ...z, mark: rebarLayerMark(z.layer) });
     }
     const withMarks: SlabProject = { ...next, zones };
-    const normalized = clampPlanBeamNamesToCatalog(ensureBeamsSplitBays(withMarks));
+    const split = clampPlanBeamNamesToCatalog(ensureBeamsSplitBays(withMarks));
+    const normalized: SlabProject = {
+      ...split,
+      sections: ensureSectionCuts(split),
+    };
     setProject(normalized);
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(normalized));
@@ -2558,34 +2565,88 @@ export function SlabApp() {
 
           {tab === "section" && (
             <Panel title="Mặt cắt sàn" className="max-w-xl">
-              <div className="flex flex-col gap-2.5">
-                <Field label="Tên mặt cắt">
-                  <Input
-                    value={project.sections[0]?.name ?? "1"}
-                    onChange={(e) => {
-                      const sections = [...project.sections];
-                      if (!sections[0]) return;
-                      sections[0] = { ...sections[0], name: e.target.value };
-                      persist({ ...project, sections });
-                    }}
-                  />
-                </Field>
-                <Field label="Vị trí cắt" unit="mm">
-                  <Input
-                    type="number"
-                    value={project.sections[0]?.at ?? 0}
-                    onChange={(e) => {
-                      const sections = [...project.sections];
-                      if (!sections[0]) return;
-                      sections[0] = { ...sections[0], at: Number(e.target.value) || 0 };
-                      persist({ ...project, sections });
-                    }}
-                  />
-                </Field>
-              </div>
-              <Button size="sm" className="mt-3" onClick={() => void exportPdf()}>
-                Xuất PDF có mặt cắt
-              </Button>
+              {(() => {
+                const sections = ensureSectionCuts(project);
+                const secX = sections.find((s) => s.direction === "X")!;
+                const secY = sections.find((s) => s.direction === "Y")!;
+                const axesX = sortAxes(project.axesX);
+                const axesY = sortAxes(project.axesY);
+                const patchSec = (
+                  dir: "X" | "Y",
+                  patch: { axisId?: string; offsetMm?: number; name?: string },
+                ) => {
+                  const next = ensureSectionCuts(project).map((s) => {
+                    if (patch.name != null) {
+                      s = { ...s, name: patch.name };
+                    }
+                    if (s.direction !== dir) return s;
+                    const axisId = patch.axisId ?? s.axisId;
+                    const offsetMm =
+                      patch.offsetMm !== undefined
+                        ? Math.round(Number(patch.offsetMm) || 0)
+                        : Math.round(Number(s.offsetMm) || 0);
+                    const updated = { ...s, axisId, offsetMm };
+                    return { ...updated, at: sectionCutAtMm(project, updated) };
+                  });
+                  persist({ ...project, sections: next });
+                };
+                const cutRow = (
+                  label: string,
+                  dir: "X" | "Y",
+                  sec: (typeof sections)[number],
+                  axes: typeof axesX,
+                ) => (
+                  <div key={dir} className="rounded-md border border-zinc-700/80 bg-zinc-950/40 p-2.5">
+                    <div className="mb-2 text-[12px] font-medium text-zinc-200">{label}</div>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+                      <span className="text-[12px] text-zinc-400">Vị trí cắt</span>
+                      <div className="flex items-center gap-1.5">
+                        <Select
+                          className="h-8 w-[4.5rem]"
+                          value={sec.axisId ?? axes[0]?.id ?? ""}
+                          onChange={(e) => patchSec(dir, { axisId: e.target.value })}
+                        >
+                          {axes.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.name || (dir === "X" ? "?" : "?")}
+                            </option>
+                          ))}
+                        </Select>
+                        <Input
+                          className="h-8 w-[5.5rem]"
+                          type="number"
+                          value={sec.offsetMm ?? 0}
+                          onChange={(e) =>
+                            patchSec(dir, { offsetMm: Number(e.target.value) || 0 })
+                          }
+                          title="Kích thước từ trục chọn trở ra (mm)"
+                        />
+                        <span className="w-7 shrink-0 text-[12px] text-zinc-400">mm</span>
+                      </div>
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-zinc-500">
+                      Cắt tại {dir === "X" ? "X" : "Y"} = {sec.at} mm (trục + khoảng cách)
+                    </p>
+                  </div>
+                );
+                return (
+                  <>
+                    <div className="flex flex-col gap-2.5">
+                      <Field label="Tên mặt cắt">
+                        <Input
+                          value={secX.name ?? "1"}
+                          onChange={(e) => patchSec("X", { name: e.target.value })}
+                        />
+                      </Field>
+                      {cutRow("Cắt theo phương trục X", "X", secX, axesX)}
+                      {cutRow("Cắt theo phương trục Y", "Y", secY, axesY)}
+                    </div>
+                    <Button size="sm" className="mt-3" onClick={() => void exportPdf()}>
+                      Xuất PDF có mặt cắt
+                    </Button>
+                  </>
+                );
+              })()}
             </Panel>
           )}
 

@@ -185,11 +185,19 @@ export interface SectionCut {
   id: string;
   name: string;
   textHeight: number;
-  /** Cắt theo phương X hoặc Y tại vị trí `at`. */
+  /**
+   * Cắt theo phương trục X → mặt cắt tại vị trí X = `at`;
+   * Cắt theo phương trục Y → mặt cắt tại vị trí Y = `at`.
+   */
   direction: RebarDir;
+  /** Vị trí cắt tuyệt đối (mm) — đồng bộ từ trục + offset. */
   at: number;
   from: number;
   to: number;
+  /** Trục tham chiếu (id trong axesX / axesY theo `direction`). */
+  axisId?: string;
+  /** Khoảng cách từ trục chọn trở ra (mm); `at` = pos(trục) + offsetMm. */
+  offsetMm?: number;
 }
 
 /** Loại dầm đã lưu (D1, D2…) — dùng để gán tên/kích thước cho đoạn trên mặt bằng. */

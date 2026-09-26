@@ -1185,7 +1185,14 @@ function drawSection(ctx: Ctx, x: number, y: number) {
   const beamH = beam.h * scale * 0.45;
   const beamB = beam.b * scale * 0.55;
   const W = 220;
-  textSimple(ctx, `MẶT CẮT ${project.sections[0]?.name ?? "1"}-1`, x + W / 2, y, 10, true, "center");
+  const secName = project.sections[0]?.name ?? "1";
+  const secX = project.sections.find((s) => s.direction === "X");
+  const secY = project.sections.find((s) => s.direction === "Y");
+  const where =
+    secX && secY
+      ? ` (X=${Math.round(secX.at)}, Y=${Math.round(secY.at)})`
+      : "";
+  textSimple(ctx, `MẶT CẮT ${secName}-1${where}`, x + W / 2, y, 9, true, "center");
   const sy = y + 16;
   // slab
   rect(ctx, x + 20, sy, W - 40, slabT, 0.9);
