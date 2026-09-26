@@ -2355,7 +2355,7 @@ export function SlabApp() {
                           setPreset("manual");
                         }}
                       >
-                        {rebarLayerMark(z.layer)} · Ø{z.dia}a{z.spacing} · {z.direction}
+                        {`${z.layer === "top" ? "Lớp trên" : "Lớp dưới"} phương ${z.direction}: Ø${z.dia}a${z.spacing}`}
                       </button>
                     </li>
                   ))}
