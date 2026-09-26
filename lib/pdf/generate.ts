@@ -1149,34 +1149,6 @@ function buildPdfScheduleRows(ctx: Ctx): Array<ScheduleRow & { stt: number }> {
   );
 }
 
-function drawShops(ctx: Ctx, yStart: number, _rows: ScheduleRow[]) {
-  let y = yStart;
-  textSimple(ctx, "SHOP NỔ THÉP SÀN", 40, y, 11, true);
-  y += 18;
-  const colW = 260;
-  const rowH = 52;
-  const ordered = buildPdfScheduleRows(ctx);
-  ordered.forEach((row, i) => {
-    const col = i % 3;
-    const r = Math.floor(i / 3);
-    const x = 36 + col * (colW + 16);
-    const yy = y + r * (rowH + 10);
-    rect(ctx, x, yy, colW, rowH, 0.7);
-    drawRebarCallout(ctx, x + 14, yy + 12, row.stt, row.dia, row.spacing);
-    textSimple(ctx, row.mark, x + 8, yy + 26, 6.5, false, "left");
-    textSimple(
-      ctx,
-      `${row.layer} · ${row.direction}`,
-      x + 70,
-      yy + 26,
-      6.5,
-    );
-    drawShape(ctx, row, x + 8, yy + 30, colW - 16, 18);
-  });
-  const rowsN = Math.ceil(Math.max(ordered.length, 1) / 3);
-  return y + rowsN * (rowH + 10) + 8;
-}
-
 function drawSection(ctx: Ctx, x: number, y: number) {
   const { project, model } = ctx;
   const scale = 0.35;
@@ -1444,8 +1416,7 @@ export async function generateSlabPdf(
   const phoiBottom = drawPhốiCảnh(ctx, 860, 72, 780, 400);
   drawSection(ctx, 860, phoiBottom + 8);
 
-  let y = Math.max(planBottom, phoiBottom) + 8;
-  y = drawShops(ctx, y + 8, model.schedule);
+  const y = Math.max(planBottom, phoiBottom) + 8;
 
   const estTableH = 56 + Math.max(model.schedule.length, 1) * 18 + 48;
   let tableY = y + 8;
