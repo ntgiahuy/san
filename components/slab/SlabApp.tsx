@@ -2275,27 +2275,25 @@ export function SlabApp() {
                       }}
                     />
                   </Field>
-                  <Field label="Lớp thép">
+                  <Field label="Lớp thép" wide>
                     <select
                       className="h-7 w-full min-w-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
-                      value={zoneForm.layer === "structural" ? "bottom" : zoneForm.layer}
+                      value={`${zoneForm.layer === "structural" ? "bottom" : zoneForm.layer}|${zoneForm.direction}`}
                       onChange={(e) => {
-                        const layer = e.target.value as RebarLayer;
-                        setZoneForm({ ...zoneForm, layer, mark: rebarLayerMark(layer) });
+                        const [layerRaw, direction] = e.target.value.split("|") as [RebarLayer, RebarDir];
+                        const layer = layerRaw === "top" ? "top" : "bottom";
+                        setZoneForm({
+                          ...zoneForm,
+                          layer,
+                          direction,
+                          mark: rebarLayerMark(layer),
+                        });
                       }}
                     >
-                      <option value="bottom">Lớp dưới</option>
-                      <option value="top">Lớp trên</option>
-                    </select>
-                  </Field>
-                  <Field label="Phương">
-                    <select
-                      className="h-7 w-full min-w-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
-                      value={zoneForm.direction}
-                      onChange={(e) => setZoneForm({ ...zoneForm, direction: e.target.value as RebarDir })}
-                    >
-                      <option value="X">X</option>
-                      <option value="Y">Y</option>
+                      <option value="bottom|X">Lớp dưới X</option>
+                      <option value="bottom|Y">Lớp dưới Y</option>
+                      <option value="top|X">Lớp trên X</option>
+                      <option value="top|Y">Lớp trên Y</option>
                     </select>
                   </Field>
                 </div>
@@ -2322,7 +2320,7 @@ export function SlabApp() {
                     disabled={hasLayerDir(zoneForm.layer, zoneForm.direction)}
                     title={
                       hasLayerDir(zoneForm.layer, zoneForm.direction)
-                        ? `Đã có ${rebarLayerMark(zoneForm.layer)} phương ${zoneForm.direction}`
+                        ? `Đã có ${rebarLayerMark(zoneForm.layer)} ${zoneForm.direction}`
                         : "Thêm vùng thép mới"
                     }
                   >
@@ -2337,8 +2335,8 @@ export function SlabApp() {
                 </div>
                 {hasLayerDir(zoneForm.layer, zoneForm.direction) && (
                   <p className="mt-1.5 text-[11px] text-amber-400/90">
-                    Đã có {rebarLayerMark(zoneForm.layer)} phương {zoneForm.direction} — chỉ Sửa
-                    hoặc Xóa rồi thêm lại.
+                    Đã có {rebarLayerMark(zoneForm.layer)} {zoneForm.direction} — chỉ Sửa hoặc Xóa
+                    rồi thêm lại.
                   </p>
                 )}
               </Panel>
