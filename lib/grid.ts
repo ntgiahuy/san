@@ -2099,8 +2099,39 @@ export function bayStripIndexForBar(
 }
 
 /**
+ * Tách thanh trong một dải thành các cụm không chồng nhau theo chiều dài thanh.
+ * Ô thủng / sàn thấp cắt tạo khe lớn → nhiều cụm → mỗi cụm 1 cây điển hình.
+ * Dải liên tục (không cắt) → 1 cụm (giữ 1 cây / dải).
+ */
+function clusterBarsByLengthSpan(bars: RebarBarSeg[], dir: "X" | "Y"): RebarBarSeg[][] {
+  type Item = { bar: RebarBarSeg; lo: number; hi: number };
+  const items: Item[] = bars
+    .map((bar) => ({
+      bar,
+      lo: dir === "X" && bar.dir === "X" ? bar.x0 : bar.dir === "Y" ? bar.y0 : 0,
+      hi: dir === "X" && bar.dir === "X" ? bar.x1 : bar.dir === "Y" ? bar.y1 : 0,
+    }))
+    .sort((a, b) => a.lo - b.lo || a.hi - b.hi);
+  /** Khe > bề rộng dầm thường → coi là cắt bởi ô thủng / sàn thấp. */
+  const GAP_MM = 400;
+  const clusters: Item[][] = [];
+  for (const it of items) {
+    const last = clusters[clusters.length - 1];
+    if (!last) {
+      clusters.push([it]);
+      continue;
+    }
+    const lastHi = Math.max(...last.map((x) => x.hi));
+    if (it.lo > lastHi + GAP_MM) clusters.push([it]);
+    else last.push(it);
+  }
+  return clusters.map((c) => c.map((x) => x.bar));
+}
+
+/**
  * Gộp theo dải ô (1 cây điển hình / cột với thanh Y, / hàng với thanh X).
- * Minh họa: phương Y với 2 nhịp trục → đúng 2 thanh (1–2 và 2–3).
+ * Khi dải bị ô thủng / sàn thấp cắt thành nhiều đoạn rời → 1 cây / mỗi cụm liên tục.
+ * Minh họa: phương Y với 2 nhịp trục liên tục → đúng 2 thanh (1–2 và 2–3).
  */
 export function groupTypicalRebarByBayStrip(
   project: SlabProject,
@@ -2135,8 +2166,16 @@ export function groupTypicalRebarByBayStrip(
         return len >= 300;
       });
       if (!normalBars.length) continue;
-      const mid = normalBars[Math.floor((normalBars.length - 1) / 2)]!;
-      groups.push({ bars: stripBars, typical: mid, stripIndex: strip });
+      const clusters = clusterBarsByLengthSpan(normalBars, dir);
+      for (const cluster of clusters) {
+        const sorted = [...cluster].sort((a, b) => {
+          if (dir === "X" && a.dir === "X" && b.dir === "X") return a.y - b.y;
+          if (dir === "Y" && a.dir === "Y" && b.dir === "Y") return a.x - b.x;
+          return 0;
+        });
+        const mid = sorted[Math.floor((sorted.length - 1) / 2)]!;
+        groups.push({ bars: sorted, typical: mid, stripIndex: strip });
+      }
     }
   }
   return groups;
