@@ -858,21 +858,30 @@ export function stripRebarBarSegments(
         const xBarLo = leftOuter + cover;
         const xBarHi = rightOuter - cover;
         if (!(xBarHi - xBarLo > 1)) continue;
-        const obstacleCuts = expandCutsByCover(
-          cuts
-            .filter((r) => Math.min(r.y1, r.y0) < my + 1 && Math.max(r.y1, r.y0) > my - 1)
-            .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) })),
-          cover,
-        );
-        // Cắt thân dầm độc lập theo hàng ô chứa my
+        // Hàng trục chứa my — ô thủng/sàn thấp cắt cả hàng (kể trạm trên thân dầm biên)
         let iyHit = -1;
         for (let iy = 0; iy < axesY.length - 1; iy++) {
-          const s = baySlabExtent(project, axesX, axesY, 0, iy);
-          if (my >= s.y0 - 1 && my <= s.y1 + 1) {
+          const lo = axesY[iy]!.pos;
+          const hi = axesY[iy + 1]!.pos;
+          const last = iy === axesY.length - 2;
+          if (last ? my >= lo - 1 && my <= hi + 1 : my >= lo - 1 && my < hi) {
             iyHit = iy;
             break;
           }
         }
+        const rowLo = iyHit >= 0 ? axesY[iyHit]!.pos : -Infinity;
+        const rowHi = iyHit >= 0 ? axesY[iyHit + 1]!.pos : Infinity;
+        const obstacleCuts = expandCutsByCover(
+          cuts
+            .filter((r) => {
+              const ry0 = Math.min(r.y0, r.y1);
+              const ry1 = Math.max(r.y0, r.y1);
+              if (ry0 < my + 1 && ry1 > my - 1) return true;
+              return iyHit >= 0 && ry1 > rowLo + 1 && ry0 < rowHi - 1;
+            })
+            .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) })),
+          cover,
+        );
         const indep =
           iyHit >= 0 ? independentBeamGaps(project, axesX, axesY, "X", iyHit) : [];
         const normals =
@@ -911,20 +920,30 @@ export function stripRebarBarSegments(
         const yBarLo = bottomOuter + cover;
         const yBarHi = topOuter - cover;
         if (!(yBarHi - yBarLo > 1)) continue;
-        const obstacleCuts = expandCutsByCover(
-          cuts
-            .filter((r) => Math.min(r.x1, r.x0) < mx + 1 && Math.max(r.x1, r.x0) > mx - 1)
-            .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) })),
-          cover,
-        );
+        // Cột trục chứa mx — ô thủng/sàn thấp cắt cả cột (kể trạm trên thân dầm biên)
         let ixHit = -1;
         for (let ix = 0; ix < axesX.length - 1; ix++) {
-          const s = baySlabExtent(project, axesX, axesY, ix, 0);
-          if (mx >= s.x0 - 1 && mx <= s.x1 + 1) {
+          const lo = axesX[ix]!.pos;
+          const hi = axesX[ix + 1]!.pos;
+          const last = ix === axesX.length - 2;
+          if (last ? mx >= lo - 1 && mx <= hi + 1 : mx >= lo - 1 && mx < hi) {
             ixHit = ix;
             break;
           }
         }
+        const colLo = ixHit >= 0 ? axesX[ixHit]!.pos : -Infinity;
+        const colHi = ixHit >= 0 ? axesX[ixHit + 1]!.pos : Infinity;
+        const obstacleCuts = expandCutsByCover(
+          cuts
+            .filter((r) => {
+              const rx0 = Math.min(r.x0, r.x1);
+              const rx1 = Math.max(r.x0, r.x1);
+              if (rx0 < mx + 1 && rx1 > mx - 1) return true;
+              return ixHit >= 0 && rx1 > colLo + 1 && rx0 < colHi - 1;
+            })
+            .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) })),
+          cover,
+        );
         const indep =
           ixHit >= 0 ? independentBeamGaps(project, axesX, axesY, "Y", ixHit) : [];
         const normals =
@@ -2433,39 +2452,62 @@ function pickSpanAfterObstacles(
   const axesX = sortAxes(project.axesX ?? []);
   const axesY = sortAxes(project.axesY ?? []);
   const cuts = rebarCutRects(project);
-  const obstacleCuts =
-    dir === "X"
-      ? expandCutsByCover(
-          cuts
-            .filter((r) => Math.min(r.y1, r.y0) < station + 1 && Math.max(r.y1, r.y0) > station - 1)
-            .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) })),
-          cover,
-        )
-      : expandCutsByCover(
-          cuts
-            .filter((r) => Math.min(r.x1, r.x0) < station + 1 && Math.max(r.x1, r.x0) > station - 1)
-            .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) })),
-          cover,
-        );
 
   let stripHit = -1;
   if (dir === "X") {
     for (let iy = 0; iy < axesY.length - 1; iy++) {
-      const s = baySlabExtent(project, axesX, axesY, 0, iy);
-      if (station >= s.y0 - 1 && station <= s.y1 + 1) {
+      const a0 = axesY[iy]!.pos;
+      const a1 = axesY[iy + 1]!.pos;
+      const last = iy === axesY.length - 2;
+      if (last ? station >= a0 - 1 && station <= a1 + 1 : station >= a0 - 1 && station < a1) {
         stripHit = iy;
         break;
       }
     }
   } else {
     for (let ix = 0; ix < axesX.length - 1; ix++) {
-      const s = baySlabExtent(project, axesX, axesY, ix, 0);
-      if (station >= s.x0 - 1 && station <= s.x1 + 1) {
+      const a0 = axesX[ix]!.pos;
+      const a1 = axesX[ix + 1]!.pos;
+      const last = ix === axesX.length - 2;
+      if (last ? station >= a0 - 1 && station <= a1 + 1 : station >= a0 - 1 && station < a1) {
         stripHit = ix;
         break;
       }
     }
   }
+  const stripLo =
+    stripHit >= 0 ? (dir === "X" ? axesY[stripHit]!.pos : axesX[stripHit]!.pos) : -Infinity;
+  const stripHi =
+    stripHit >= 0
+      ? dir === "X"
+        ? axesY[stripHit + 1]!.pos
+        : axesX[stripHit + 1]!.pos
+      : Infinity;
+
+  const obstacleCuts =
+    dir === "X"
+      ? expandCutsByCover(
+          cuts
+            .filter((r) => {
+              const ry0 = Math.min(r.y0, r.y1);
+              const ry1 = Math.max(r.y0, r.y1);
+              if (ry0 < station + 1 && ry1 > station - 1) return true;
+              return stripHit >= 0 && ry1 > stripLo + 1 && ry0 < stripHi - 1;
+            })
+            .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) })),
+          cover,
+        )
+      : expandCutsByCover(
+          cuts
+            .filter((r) => {
+              const rx0 = Math.min(r.x0, r.x1);
+              const rx1 = Math.max(r.x0, r.x1);
+              if (rx0 < station + 1 && rx1 > station - 1) return true;
+              return stripHit >= 0 && rx1 > stripLo + 1 && rx0 < stripHi - 1;
+            })
+            .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) })),
+          cover,
+        );
   const indep =
     stripHit >= 0 ? independentBeamGaps(project, axesX, axesY, dir, stripHit) : [];
   const segs = subtract1D(lo, hi, [...obstacleCuts, ...indep]);
