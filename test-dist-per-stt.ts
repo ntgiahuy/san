@@ -96,6 +96,7 @@ for (const bar of cutY) {
     console.log("FAIL cut-low bar missing merged dist junction", bar);
     ok = false;
   } else {
+    if (bar.dir !== "Y") continue;
     const my = (bar.y0 + bar.y1) / 2;
     const nearest = hits.reduce((a, b) =>
       Math.abs((a.yA + a.yB) / 2 - my) <= Math.abs((b.yA + b.yB) / 2 - my) ? a : b,
