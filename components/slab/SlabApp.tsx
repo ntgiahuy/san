@@ -2290,10 +2290,10 @@ export function SlabApp() {
                         });
                       }}
                     >
-                      <option value="bottom|X">Lớp dưới X</option>
-                      <option value="bottom|Y">Lớp dưới Y</option>
-                      <option value="top|X">Lớp trên X</option>
-                      <option value="top|Y">Lớp trên Y</option>
+                      <option value="bottom|X">Lớp dưới phương X</option>
+                      <option value="bottom|Y">Lớp dưới phương Y</option>
+                      <option value="top|X">Lớp trên phương X</option>
+                      <option value="top|Y">Lớp trên phương Y</option>
                     </select>
                   </Field>
                 </div>
