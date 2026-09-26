@@ -1098,11 +1098,11 @@ function drawPlan(
   );
 
   // Tiêu đề + tỉ lệ: dưới bản vẽ, hở khỏi số dim ngang
-  const titleY = dimBottomY + 28;
-  textSimple(ctx, planTitle, ox + maxW / 2, titleY, 11, true, "center");
-  textSimple(ctx, `TL: 1/${project.info.drawingScale}`, ox + maxW / 2, titleY + 14, 8, false, "center");
+  const titleY = dimBottomY + 18;
+  textSimple(ctx, planTitle, ox + maxW / 2, titleY, 10, true, "center");
+  textSimple(ctx, `TL: 1/${project.info.drawingScale}`, ox + maxW / 2, titleY + 12, 7.5, false, "center");
 
-  return titleY + 24;
+  return titleY + 20;
 }
 
 /**
@@ -1327,39 +1327,37 @@ export async function generateSlabPdf(
   });
 
   const title = `${project.info.name} (SL=${project.info.quantity}; dày=${project.info.thickness}mm)`;
-  const drawPageChrome = (pageLabel: string) => {
-    textSimple(ctx, pageLabel, 28, 34, 8, false, "left");
-    textSimple(ctx, title, PAGE_W - 36, 34, 11, true, "right");
-    textSimple(
-      ctx,
-      `Bê tông ${project.info.concreteGrade} · Thép ${project.info.steelGrade} · Lớp BV ${project.info.cover}mm`,
-      PAGE_W - 36,
-      48,
-      7.5,
-      false,
-      "right",
-    );
-  };
+  textSimple(ctx, "1/1", 28, 34, 8, false, "left");
+  textSimple(ctx, title, PAGE_W - 36, 34, 11, true, "right");
+  textSimple(
+    ctx,
+    `Bê tông ${project.info.concreteGrade} · Thép ${project.info.steelGrade} · Lớp BV ${project.info.cover}mm`,
+    PAGE_W - 36,
+    48,
+    7.5,
+    false,
+    "right",
+  );
 
-  // Trang 1: Mặt bằng lớp dưới (trái) · Thống kê + Tổng hợp (phải — chỗ phối cảnh cũ)
-  drawPageChrome("1/2");
-  drawPlan(ctx, 40, 78, 780, 400, zones, "bottom");
-  const table = drawScheduleTable(ctx, 860, 72);
-  drawSummaryTable(ctx, 860, 72 + table.h + 20);
+  /**
+   * Một trang: Lớp dưới (trên) + Lớp trên (dưới) cùng cột trái;
+   * mỗi mặt bằng chỉ thép lớp đó phương X+Y.
+   * Phải: thống kê + tổng hợp.
+   */
+  const leftX = 36;
+  const planW = 780;
+  const gap = 10;
+  const topY = 62;
+  const bottomLimit = PAGE_H - 28;
+  // Chia đôi chiều cao còn lại cho 2 mặt bằng (kèm dim + tiêu đề)
+  const stackBudget = bottomLimit - topY - gap;
+  const planH = Math.max(220, Math.min(340, Math.floor(stackBudget / 2) - 95));
 
-  // Trang 2: Mặt bằng lớp trên
-  const page2 = pdf.addPage([PAGE_W, PAGE_H]);
-  page2.drawRectangle({
-    x: 16,
-    y: 16,
-    width: PAGE_W - 32,
-    height: PAGE_H - 32,
-    borderColor: BLACK,
-    borderWidth: 1.05,
-  });
-  ctx.page = page2;
-  drawPageChrome("2/2");
-  drawPlan(ctx, 40, 78, 780, 400, zones, "top");
+  const afterBottom = drawPlan(ctx, leftX, topY, planW, planH, zones, "bottom");
+  drawPlan(ctx, leftX, afterBottom + gap, planW, planH, zones, "top");
+
+  const table = drawScheduleTable(ctx, 860, 62);
+  drawSummaryTable(ctx, 860, 62 + table.h + 16);
 
   return pdf.save();
 }
