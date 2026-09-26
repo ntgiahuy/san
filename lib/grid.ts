@@ -2305,8 +2305,69 @@ export function clipSpanToCoverEnvelope(
 }
 
 /**
+ * Sau khi neo full biên ± BV: cắt lại ô thủng / sàn thấp cắt + khe dầm độc lập,
+ * rồi giữ đoạn chứa trung điểm thanh gốc (không cầu nối xuyên ô trống).
+ */
+function pickSpanAfterObstacles(
+  project: SlabProject,
+  dir: "X" | "Y",
+  station: number,
+  lo: number,
+  hi: number,
+  preferMid: number,
+  cover: number,
+): { lo: number; hi: number } | null {
+  const axesX = sortAxes(project.axesX ?? []);
+  const axesY = sortAxes(project.axesY ?? []);
+  const cuts = rebarCutRects(project);
+  const obstacleCuts =
+    dir === "X"
+      ? expandCutsByCover(
+          cuts
+            .filter((r) => Math.min(r.y1, r.y0) < station + 1 && Math.max(r.y1, r.y0) > station - 1)
+            .map((r) => ({ lo: Math.min(r.x0, r.x1), hi: Math.max(r.x0, r.x1) })),
+          cover,
+        )
+      : expandCutsByCover(
+          cuts
+            .filter((r) => Math.min(r.x1, r.x0) < station + 1 && Math.max(r.x1, r.x0) > station - 1)
+            .map((r) => ({ lo: Math.min(r.y0, r.y1), hi: Math.max(r.y0, r.y1) })),
+          cover,
+        );
+
+  let stripHit = -1;
+  if (dir === "X") {
+    for (let iy = 0; iy < axesY.length - 1; iy++) {
+      const s = baySlabExtent(project, axesX, axesY, 0, iy);
+      if (station >= s.y0 - 1 && station <= s.y1 + 1) {
+        stripHit = iy;
+        break;
+      }
+    }
+  } else {
+    for (let ix = 0; ix < axesX.length - 1; ix++) {
+      const s = baySlabExtent(project, axesX, axesY, ix, 0);
+      if (station >= s.x0 - 1 && station <= s.x1 + 1) {
+        stripHit = ix;
+        break;
+      }
+    }
+  }
+  const indep =
+    stripHit >= 0 ? independentBeamGaps(project, axesX, axesY, dir, stripHit) : [];
+  const segs = subtract1D(lo, hi, [...obstacleCuts, ...indep]);
+  if (!segs.length) return null;
+  return (
+    segs.find((s) => preferMid >= s.lo - 1 && preferMid <= s.hi + 1) ??
+    [...segs].sort((a, b) => b.hi - b.lo - (a.hi - a.lo))[0] ??
+    null
+  );
+}
+
+/**
  * Đặt lại đầu thanh vào da ngoài ± lớp BV tại đúng trạm (sau khi lệch ⊥ 2 lớp),
  * rồi cắt theo bao 4 cạnh — tránh móc rơi ngoài dầm xéo / hình thang.
+ * Giữ cắt ô thủng / sàn thấp cắt (không kéo thép xuyên ô trống).
  */
 export function reanchorBarEndsToCover(project: SlabProject, bar: RebarBarSeg): RebarBarSeg {
   const cover = slabCoverMm(project);
@@ -2322,7 +2383,17 @@ export function reanchorBarEndsToCover(project: SlabProject, bar: RebarBarSeg): 
     if (!(x1 - x0 > 1)) return bar;
     const clipped = clipSpanToCoverEnvelope(project, "X", bar.y, x0, x1, cover);
     if (!clipped) return bar;
-    return { ...bar, x0: clipped.lo, x1: clipped.hi };
+    const hit = pickSpanAfterObstacles(
+      project,
+      "X",
+      bar.y,
+      clipped.lo,
+      clipped.hi,
+      (bar.x0 + bar.x1) / 2,
+      cover,
+    );
+    if (!hit) return bar;
+    return { ...bar, x0: hit.lo, x1: hit.hi };
   }
 
   const bottom = beamOuterFacesAtAlong(project, "X", axesY[0]!, bar.x);
@@ -2332,7 +2403,17 @@ export function reanchorBarEndsToCover(project: SlabProject, bar: RebarBarSeg): 
   if (!(y1 - y0 > 1)) return bar;
   const clipped = clipSpanToCoverEnvelope(project, "Y", bar.x, y0, y1, cover);
   if (!clipped) return bar;
-  return { ...bar, y0: clipped.lo, y1: clipped.hi };
+  const hit = pickSpanAfterObstacles(
+    project,
+    "Y",
+    bar.x,
+    clipped.lo,
+    clipped.hi,
+    (bar.y0 + bar.y1) / 2,
+    cover,
+  );
+  if (!hit) return bar;
+  return { ...bar, y0: hit.lo, y1: hit.hi };
 }
 
 /** Lệch ⊥ minh họa 2 lớp + neo đầu thép lại theo lớp BV tại trạm mới. */
