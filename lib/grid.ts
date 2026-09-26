@@ -1091,13 +1091,16 @@ export type RebarPressMark = {
 /**
  * Điểm nhấn thép tại thân dầm quanh ô sàn thấp chế độ nhấn.
  * Độ nhấn = chênh cao độ sàn thấp (`drop`).
+ * Chỉ gắn trên cây điển hình (không đánh mọi thanh a=… — tránh chồng ↓drop).
  */
 export function stripRebarPressMarks(
   project: SlabProject,
   axesX: GridAxis[],
   axesY: GridAxis[],
+  zones?: RebarZone[],
 ): RebarPressMark[] {
-  const bars = stripRebarBarSegments(project, axesX, axesY);
+  const allBars = stripRebarBarSegments(project, axesX, axesY);
+  const bars = typicalLayeredRebarBars(project, allBars, zones ?? project.zones ?? []);
   const marks: RebarPressMark[] = [];
   const eps = 1;
 
