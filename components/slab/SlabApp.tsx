@@ -2278,7 +2278,7 @@ export function SlabApp() {
                   <Field label="Lớp thép">
                     <select
                       className="h-7 w-full min-w-0 rounded-md border border-zinc-600 bg-zinc-950 px-2 text-sm"
-                      value={zoneForm.layer}
+                      value={zoneForm.layer === "structural" ? "bottom" : zoneForm.layer}
                       onChange={(e) => {
                         const layer = e.target.value as RebarLayer;
                         setZoneForm({ ...zoneForm, layer, mark: rebarLayerMark(layer) });
@@ -2286,7 +2286,6 @@ export function SlabApp() {
                     >
                       <option value="bottom">Lớp dưới</option>
                       <option value="top">Lớp trên</option>
-                      <option value="structural">Cấu tạo</option>
                     </select>
                   </Field>
                   <Field label="Phương">
