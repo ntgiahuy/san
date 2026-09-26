@@ -25,6 +25,7 @@ import {
   slabDistRangeForBar,
   buildMergedDistRanges,
   hooksForRebarBar,
+  rebarBarStraightLenMm,
   rebarHookSegments,
   typicalLayeredRebarBars,
   faceChainAlongX,
@@ -993,9 +994,14 @@ function drawPlan(
         return mx >= zx0 - 1 && mx <= zx1 + 1 && my >= zy0 - 1 && my <= zy1 + 1;
       });
       const z = hits.find((h) => h.layer === "bottom") ?? hits[0];
-      if (z) return `${z.mark}|${z.dia}|${z.spacing}|${z.direction}`;
+      const hooks = hooksForRebarBar(project, bar, rebarZones);
+      const len = Math.round(rebarBarStraightLenMm(bar) + hooks.left + hooks.right);
+      // Mỗi số hiệu (Ø+a+L+móc) một khoảng rải riêng trên PDF
+      if (z) {
+        return `${z.mark}|${z.dia}|${z.spacing}|${z.direction}|L${len}|H${hooks.left}/${hooks.right}`;
+      }
       const spec = steelSpecForBar(zones, ctx.model.schedule, bar);
-      return `${bar.dir}|${spec.dia}|${spec.spacing}`;
+      return `${bar.dir}|${spec.dia}|${spec.spacing}|L${len}|H${hooks.left}/${hooks.right}`;
     };
     const merged = buildMergedDistRanges(
       project,
