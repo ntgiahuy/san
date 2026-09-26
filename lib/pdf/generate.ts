@@ -191,9 +191,29 @@ function textInAxisBubble(ctx: Ctx, str: string, cx: number, cy: number, size = 
   textInkCentered(ctx, str, cx, cy, size, BLACK, true);
 }
 
+/** Chiều cao tam giác đầu khoảng rải — dùng rút nét thân. */
+const DIST_END_AH = 7;
+
 /**
- * Đầu/cuối khoảng rải giống PDF hình 1:
- * tip = mí dầm − 50mm; gạch ngang dày kéo vào trong + tam giác đỉnh tại tip.
+ * pdf-lib drawSvgPath: translate(x,y) rồi scale(1,-1) (Y SVG ↓).
+ * Neo (0, PAGE_H) + tọa độ top-left → đúng vị trí trang PDF.
+ */
+function drawSvgTopLeft(
+  ctx: Ctx,
+  pathTopLeft: string,
+  color: ReturnType<typeof rgb>,
+) {
+  ctx.page.drawSvgPath(pathTopLeft, {
+    x: 0,
+    y: PAGE_H,
+    color,
+    borderWidth: 0,
+  });
+}
+
+/**
+ * Đầu/cuối khoảng rải (đối xứng 2 đầu):
+ * gạch dày ⊥ tại tip + tam giác đặc đỉnh tại tip, đáy hướng vào trong.
  */
 function drawDistEndCap(ctx: Ctx, tipX: number, tipY: number, fromX: number, fromY: number) {
   const dx = tipX - fromX;
@@ -203,33 +223,31 @@ function drawDistEndCap(ctx: Ctx, tipX: number, tipY: number, fromX: number, fro
   const uy = dy / len;
   const px = -uy;
   const py = ux;
-  const ah = 5.5; // chiều cao tam giác (×0.5)
-  const aw = 2.75; // nửa đáy tam giác
-  const capHalf = 4.5; // nửa bề rộng gạch ngang
-  const capThick = 1.7; // bề dày gạch ngang (hình chữ nhật đặc)
+  /** Khớp minh họa UI: gạch dày + mũi tên tam giác. */
+  const ah = DIST_END_AH;
+  const aw = 3.5;
+  const capHalf = 5.5;
+  const capThick = 2.1;
 
-  // Gạch ngang dày: mép ngoài tại tip, kéo vào trong (không đè mí dầm)
+  // Gạch ngang dày tại tip (vuông góc đường khoảng rải), kéo vào trong
   const ox = -ux * capThick;
   const oy = -uy * capThick;
   const capPath =
-    `M ${tipX - px * capHalf} ${ty(tipY - py * capHalf)} ` +
-    `L ${tipX + px * capHalf} ${ty(tipY + py * capHalf)} ` +
-    `L ${tipX + px * capHalf + ox} ${ty(tipY + py * capHalf + oy)} ` +
-    `L ${tipX - px * capHalf + ox} ${ty(tipY - py * capHalf + oy)} Z`;
-  ctx.page.drawSvgPath(capPath, { color: DIST_BLUE });
+    `M ${tipX - px * capHalf} ${tipY - py * capHalf} ` +
+    `L ${tipX + px * capHalf} ${tipY + py * capHalf} ` +
+    `L ${tipX + px * capHalf + ox} ${tipY + py * capHalf + oy} ` +
+    `L ${tipX - px * capHalf + ox} ${tipY - py * capHalf + oy} Z`;
+  drawSvgTopLeft(ctx, capPath, DIST_BLUE);
 
-  // Tam giác: đỉnh tại tip, đáy hướng vào trong
+  // Tam giác đặc: đỉnh tại tip (ra ngoài), đáy hướng vào trong
   const bx = tipX - ux * ah;
   const by = tipY - uy * ah;
   const tri =
-    `M ${tipX} ${ty(tipY)} ` +
-    `L ${bx + px * aw} ${ty(by + py * aw)} ` +
-    `L ${bx - px * aw} ${ty(by - py * aw)} Z`;
-  ctx.page.drawSvgPath(tri, { color: DIST_BLUE });
+    `M ${tipX} ${tipY} ` +
+    `L ${bx + px * aw} ${by + py * aw} ` +
+    `L ${bx - px * aw} ${by - py * aw} Z`;
+  drawSvgTopLeft(ctx, tri, DIST_BLUE);
 }
-
-/** Chiều cao tam giác đầu khoảng rải — dùng rút nét thân. */
-const DIST_END_AH = 5.5;
 
 /**
  * Chấm giao khoảng rải ∩ thanh thép (hình 2): kim cương trong vòng tròn.
@@ -240,22 +258,20 @@ function drawDistBarJunction(ctx: Ctx, cx: number, cy: number) {
   /** PDF: nhỏ gấp 3 so với kích thước cũ (r=2.8 → size 5.6). */
   const r = 2.8 / 3;
   const d = r * 0.72;
-  const cyPdf = ty(cy);
-  // Giữ neo tâm như trước (x/y = tâm vòng theo convention hiện có)
   ctx.page.drawCircle({
     x: cx,
-    y: cyPdf,
+    y: ty(cy),
     size: r * 2,
     borderColor: BLACK,
     borderWidth: 0.85 / 3,
   });
-  // Kim cương đặc — tâm đúng giao khoảng rải ∩ thép
+  // Kim cương đặc — tâm đúng giao khoảng rải ∩ thép (SVG top-left)
   const path =
-    `M ${cx} ${ty(cy - d)} ` +
-    `L ${cx + d} ${ty(cy)} ` +
-    `L ${cx} ${ty(cy + d)} ` +
-    `L ${cx - d} ${ty(cy)} Z`;
-  ctx.page.drawSvgPath(path, { color: BLACK });
+    `M ${cx} ${cy - d} ` +
+    `L ${cx + d} ${cy} ` +
+    `L ${cx} ${cy + d} ` +
+    `L ${cx - d} ${cy} Z`;
+  drawSvgTopLeft(ctx, path, BLACK);
 }
 
 /**
@@ -1007,7 +1023,7 @@ function drawPlan(
         pyA + uy * inset,
         pxB - ux * inset,
         pyB - uy * inset,
-        0.5,
+        1.0,
         DIST_BLUE,
       );
       drawDistEndCap(ctx, pxA, pyA, pxB, pyB);
