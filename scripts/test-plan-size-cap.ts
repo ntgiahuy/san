@@ -8,21 +8,22 @@ import {
   stripRebarBarSegments,
 } from "../lib/grid";
 import { createSampleS1 } from "../lib/sample";
-import { normalizeProject } from "../lib/calc";
+import { normalizeProject, computeModel } from "../lib/calc";
 
 assert.equal(clampPlanSizeMm(200_000), MAX_PLAN_SIZE_MM);
 assert.equal(clampPlanSizeMm(50), 500);
 assert.equal(clampPlanSizeMm(6000), 6000);
+assert.equal(MAX_PLAN_SIZE_MM, 50_000);
 
 const sample = createSampleS1();
-const wide = setPlanSize(sample, 200_000, sample.planHeight);
-assert.equal(wide.planWidth, MAX_PLAN_SIZE_MM);
-assert.equal(wide.planHeight, sample.planHeight);
+const wide = setPlanSize(sample, 40_000, sample.planHeight);
+assert.equal(wide.planWidth, 40_000);
 
-const both = setPlanSize(sample, 200_000, 250_000);
+const capped = setPlanSize(sample, 80_000, sample.planHeight);
+assert.equal(capped.planWidth, MAX_PLAN_SIZE_MM);
+
+const both = setPlanSize(sample, 40_000, 50_000);
 assert.ok(both.planWidth * both.planHeight <= MAX_PLAN_AREA_MM2 + 1);
-assert.ok(both.planWidth <= MAX_PLAN_SIZE_MM);
-assert.ok(both.planHeight <= MAX_PLAN_SIZE_MM);
 
 const fromFile = normalizeProject({
   ...sample,
@@ -35,19 +36,20 @@ const stations = rebarStationsAlong(0, 1_000_000, 50);
 assert.ok(stations.length <= Math.ceil(MAX_PLAN_SIZE_MM / 50));
 
 const t0 = Date.now();
-const bars = stripRebarBarSegments(wide, wide.axesX, wide.axesY);
+computeModel(wide);
+stripRebarBarSegments(wide, wide.axesX, wide.axesY);
 const ms = Date.now() - t0;
-assert.ok(ms < 3000, `stripRebar too slow: ${ms}ms bars=${bars.length}`);
+assert.ok(ms < 800, `40m wide too slow: ${ms}ms`);
 
 const t1 = Date.now();
-const barsBoth = stripRebarBarSegments(both, both.axesX, both.axesY);
+computeModel(both);
+stripRebarBarSegments(both, both.axesX, both.axesY);
 const msBoth = Date.now() - t1;
-assert.ok(msBoth < 5000, `stripRebar(both) too slow: ${msBoth}ms`);
+assert.ok(msBoth < 1200, `area-capped both too slow: ${msBoth}ms`);
 
 console.log("ok", {
   MAX_PLAN_SIZE_MM,
-  wideBars: bars.length,
+  MAX_PLAN_AREA_MM2,
   wideMs: ms,
-  both: { W: both.planWidth, H: both.planHeight, bars: barsBoth.length, ms: msBoth },
-  stations: stations.length,
+  both: { W: both.planWidth, H: both.planHeight, ms: msBoth },
 });
